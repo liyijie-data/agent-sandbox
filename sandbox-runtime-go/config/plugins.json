@@ -1,0 +1,31 @@
+{
+  "plugins": [
+    {
+      "name": "model.gateway"
+    },
+    {
+      "name": "tools.standard"
+    },
+    {
+      "name": "resources.standard"
+    },
+    {
+      "name": "context.standard"
+    },
+    {
+      "name": "loop.standard"
+    },
+    {
+      "name": "checkpoint.standard"
+    },
+    {
+      "name": "artifacts.standard"
+    },
+    {
+      "name": "events.standard"
+    },
+    {
+      "name": "trace.standard"
+    }
+  ]
+}

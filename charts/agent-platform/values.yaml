@@ -1,0 +1,2 @@
+# 本 values 文件保持为空（无默认覆盖）；按环境使用 values-local.yaml / values-uat.yaml / values-prod.yaml。
+# 各字段默认值、单位与必填说明见 CONFIGURATION.md。

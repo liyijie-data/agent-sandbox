@@ -1,0 +1,184 @@
+/* 共享基础组件样式（Button / IconButton / EmptyState / StatusBadge / FormField）。 */
+
+/* ---------- Button ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font: inherit;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  white-space: nowrap;
+  transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn.sm { padding: 5px 10px; font-size: var(--fs-sm); }
+.btn.md { padding: 8px 14px; font-size: var(--fs-md); }
+.btn.lg { padding: 10px 16px; font-size: var(--fs-lg); }
+
+.primary {
+  color: #fff;
+  background: var(--accent);
+}
+.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.primary:active:not(:disabled) {
+  background: var(--accent-press);
+}
+
+.outline {
+  color: var(--accent);
+  background: transparent;
+  border-color: var(--accent);
+}
+.outline:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+
+.ghost {
+  color: var(--text-secondary);
+  background: transparent;
+  border-color: transparent;
+}
+.ghost:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.danger {
+  color: var(--state-error);
+  background: transparent;
+  border-color: transparent;
+}
+.danger:hover:not(:disabled) {
+  color: #fff;
+  background: var(--state-error);
+}
+
+.spinner {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ---------- IconButton ---------- */
+.iconBtn {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  transition: background 0.14s ease, color 0.14s ease;
+}
+.iconBtn:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+.iconBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.iconBtnSolid {
+  color: #fff;
+  background: var(--accent);
+}
+.iconBtnSolid:hover:not(:disabled) {
+  color: #fff;
+  background: var(--accent-hover);
+}
+
+/* ---------- EmptyState ---------- */
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 6px;
+  padding: 36px 20px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+}
+.emptyStateCompact {
+  padding: 24px 16px;
+}
+.emptyIcon {
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+.emptyTitle {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.emptyDescription {
+  font-size: var(--fs-md);
+  color: var(--text-muted);
+  max-width: 360px;
+  line-height: 1.5;
+}
+.emptyAction {
+  margin-top: 10px;
+}
+
+/* ---------- StatusBadge ---------- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  line-height: 1;
+  color: var(--text-secondary);
+}
+.badgeDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.badgeOk { color: var(--state-ok); }
+.badgeRun { color: var(--state-run); }
+.badgeWarn { color: var(--state-warn); }
+.badgeError { color: var(--state-error); }
+.badgeNeutral { color: var(--text-secondary); }
+
+/* ---------- FormField ---------- */
+.formField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.formLabelRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.formLabel {
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.formCounter {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.formHint {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}

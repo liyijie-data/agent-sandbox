@@ -1,0 +1,8 @@
+FROM host.docker.internal:15000/agent-platform/sandbox-runtime:v2-clean-20260829213110
+USER root
+COPY agent_runtime ./agent_runtime
+COPY runtime_manifest.v1.json ./manifest.json
+ENV PYTHONUNBUFFERED=1
+ENV TZ=Asia/Shanghai
+ENV AGENT_RUNTIME_MANIFEST=/app/manifest.json
+USER sandbox

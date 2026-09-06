@@ -1,0 +1,5 @@
+# Agent Sandbox official reference Runtime (T04) dependencies.
+# The core reference runtime is stdlib-only: HTTP transport (http.server),
+# model/steering clients (urllib), recovery package (tarfile), JSON contracts.
+# No extension SDK is pulled here; T06/T07 wire their own adapters.
+# (kept empty: no third-party runtime requirement)

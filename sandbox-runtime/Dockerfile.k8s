@@ -1,0 +1,36 @@
+# Agent Sandbox official reference Runtime image — k8s / Alpine variant (T04).
+#
+# The reference Runtime is stdlib-only Python: DES-04 transport (http.server on
+# 8888), model/steering clients (urllib), recovery package (tarfile), strict
+# JSON contracts. No extension SDK is installed; T06/T07 wire their own adapters.
+#
+# Runs as a non-root user and serves the DES-04 transport from /app as its
+# sandbox root. run.json lands via /upload; the agent writes
+# /app/output/result.json; executions are driven through POST /execute (the
+# registered manifest entrypoint python -m agent_runtime ... --config /app/run.json).
+
+FROM python:3.12-alpine
+
+USER root
+
+RUN apk add --no-cache tzdata ca-certificates curl \
+    && mkdir -p /app/input /app/output /app/workspace \
+    && adduser -D -u 1000 sandbox \
+    && chown -R sandbox:sandbox /app
+
+WORKDIR /app
+
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt || true
+
+COPY agent_runtime ./agent_runtime
+COPY runtime_manifest.v1.json ./manifest.json
+
+ENV PYTHONUNBUFFERED=1
+ENV TZ=Asia/Shanghai
+ENV AGENT_RUNTIME_MANIFEST=/app/manifest.json
+
+EXPOSE 8888
+USER sandbox
+
+CMD ["python", "-m", "agent_runtime", "--serve", "--port", "8888"]

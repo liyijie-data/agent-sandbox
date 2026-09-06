@@ -1,0 +1,8 @@
+# AMD64 control-plane runtime image. The build script cross-compiles
+# agent-platform on the host into the Docker build context before invoking
+# this Dockerfile; it deliberately does not run Node or Go inside Docker.
+FROM gcr.io/distroless/static-debian12:nonroot
+COPY agent-platform /usr/local/bin/agent-platform
+USER 65532:65532
+ENTRYPOINT ["/usr/local/bin/agent-platform"]
+CMD ["server"]

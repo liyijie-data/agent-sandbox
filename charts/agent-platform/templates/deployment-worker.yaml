@@ -1,0 +1,135 @@
+{{- $fullname := .Release.Name -}}
+{{- $workerName := printf "%s-worker" $fullname -}}
+{{- $serverName := printf "%s-server" $fullname -}}
+{{- $saName := printf "%s-worker" $fullname -}}
+{{- $image := .Values.worker.image -}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $saName }}
+  labels: {app: {{ $workerName }}}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $saName }}
+  labels: {app: {{ $workerName }}}
+rules:
+  - apiGroups: [extensions.agents.x-k8s.io]
+    resources: [sandboxclaims]
+    verbs: [create, get, list, watch, delete]
+  - apiGroups: [extensions.agents.x-k8s.io]
+    resources: [sandboxtemplates, sandboxwarmpools]
+    verbs: [create, get, list, update, patch, delete]
+  - apiGroups: [agents.x-k8s.io]
+    resources: [sandboxes]
+    verbs: [get, list, watch]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [create, delete, get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $saName }}
+  labels: {app: {{ $workerName }}}
+subjects: [{kind: ServiceAccount, name: {{ $saName }}}]
+roleRef: {kind: Role, name: {{ $saName }}, apiGroup: rbac.authorization.k8s.io}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $workerName }}
+  labels: {app: {{ $workerName }}}
+spec:
+  replicas: {{ .Values.worker.replicas }}
+  selector: {matchLabels: {app: {{ $workerName }}}}
+  template:
+    metadata: {labels: {app: {{ $workerName }}}}
+    spec:
+      serviceAccountName: {{ $saName }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: migrate
+          image: {{ if $image.digest }}{{ $image.repository }}@{{ $image.digest }}{{ else }}{{ $image.repository }}:{{ $image.tag }}{{ end }}
+          imagePullPolicy: {{ $image.pullPolicy }}
+          args: [migrate-rebuilt]
+          envFrom: [{secretRef: {name: {{ required "secret.name is required" .Values.secret.name }}}}]
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+      containers:
+        - name: worker
+          image: {{ if $image.digest }}{{ $image.repository }}@{{ $image.digest }}{{ else }}{{ $image.repository }}:{{ $image.tag }}{{ end }}
+          imagePullPolicy: {{ $image.pullPolicy }}
+          args: [worker]
+          envFrom: [{secretRef: {name: {{ required "secret.name is required" .Values.secret.name }}}}]
+          env:
+            {{- range $key, $value := .Values.worker.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{ end }}
+            - {name: SANDBOX_API_URL, value: {{- if .Values.worker.sandboxAPIURL }} {{ .Values.worker.sandboxAPIURL | quote }}{{- else if .Values.router.enabled }} {{ printf "http://%s-router.%s.svc.cluster.local:8080" $fullname .Values.router.namespace | quote }}{{- else }} {{ fail "worker.sandboxAPIURL is required when router.enabled=false" }}{{- end }}}
+            - {name: SANDBOX_WARM_POOL, value: {{ default (printf "%s-warm-pool" $fullname) .Values.worker.warmPool | quote }} }
+            - {name: K8S_NAMESPACE, value: {{ .Release.Namespace | quote }}}
+            - {name: MODEL_GATEWAY_BASE_URL, value: {{ printf "http://%s:%v/internal/model/v1" $serverName .Values.server.service.port | quote }}}
+            - {name: RUNTIME_GATEWAY_BASE_URL, value: {{ printf "http://%s:%v/internal/v1/runtime" $serverName .Values.server.service.port | quote }}}
+            - {name: V1_RUNTIME_BASE_URL, value: {{ printf "http://%s:%v/internal/v1/runtime" $serverName .Values.server.service.port | quote }}}
+            - {name: V1_MODEL_BASE_URL, value: {{ printf "http://%s:%v/internal/v1/model" $serverName .Values.server.service.port | quote }}}
+            - {name: PLATFORM_POD_CIDRS, value: {{ .Values.platformNetwork.podCIDRs | quote }}}
+            - {name: PLATFORM_SERVICE_CIDRS, value: {{ .Values.platformNetwork.serviceCIDRs | quote }}}
+            - {name: PLATFORM_NODE_CIDRS, value: {{ .Values.platformNetwork.nodeCIDRs | quote }}}
+            - {name: PLATFORM_PROTECTED_CIDRS, value: {{ .Values.platformNetwork.protectedCIDRs | quote }}}
+            - {name: PLATFORM_BUSINESS_PRIVATE_CIDRS, value: {{ .Values.platformNetwork.businessPrivateCIDRs | quote }}}
+            - {name: PLATFORM_RESERVED_HOSTNAMES, value: {{ .Values.platformNetwork.reservedHostnames | quote }}}
+            - {name: PLATFORM_IPV6_ENABLED, value: {{ .Values.platformNetwork.ipv6Enabled | quote }}}
+            - {name: PLATFORM_ALLOW_DNS_DEPENDENCIES, value: {{ .Values.platformNetwork.allowDNSDependencies | quote }}}
+            - {name: PLATFORM_REGISTRY_ENDPOINT, value: {{ .Values.platformNetwork.registryEndpoint | quote }}}
+            - {name: PLATFORM_OBJECT_STORAGE_CIDR, value: {{ .Values.platformNetwork.objectStorageCIDR | quote }}}
+            - {name: PLATFORM_OBJECT_STORAGE_PORT, value: {{ .Values.platformNetwork.objectStoragePort | quote }}}
+            - {name: PLATFORM_KUBE_DNS_SERVICE_CIDR, value: {{ .Values.platformNetwork.kubeDNSServiceCIDR | quote }}}
+            - {name: PLATFORM_CONTROL_PLANE_SERVICE_CIDR, value: {{ .Values.platformNetwork.controlPlaneServiceCIDR | quote }}}
+            - {name: SANDBOX_TEMPLATE_PREFIX, value: {{ $fullname | quote }}}
+            - {name: SANDBOX_REGISTRATION_WARM_POOL_REPLICAS, value: {{ .Values.warmPool.replicas | quote }}}
+            - {name: PLATFORM_WARM_POOL_BUDGET, value: {{ .Values.warmPool.budget | quote }}}
+            - {name: PLATFORM_WARM_POOL_MAX_PER_IMAGE, value: {{ .Values.warmPool.maxPerImage | quote }}}
+            - {name: PLATFORM_WARM_POOL_DEFAULT_POOL, value: {{ .Values.warmPool.defaultPool | quote }}}
+            - {name: SANDBOX_ROLLOUT_POLL_INTERVAL, value: "5s"}
+            - {name: SANDBOX_ROLLOUT_TIMEOUT, value: "10m"}
+            - {name: SANDBOX_CPU_REQUEST, value: {{ .Values.sandbox.resources.requests.cpu | quote }}}
+            - {name: SANDBOX_CPU_LIMIT, value: {{ .Values.sandbox.resources.limits.cpu | quote }}}
+            - {name: SANDBOX_MEMORY_REQUEST, value: {{ .Values.sandbox.resources.requests.memory | quote }}}
+            - {name: SANDBOX_MEMORY_LIMIT, value: {{ .Values.sandbox.resources.limits.memory | quote }}}
+            - {name: SANDBOX_REGISTRATION_SERVER_LABEL, value: {{ $serverName | quote }}}
+            - {name: SANDBOX_REGISTRATION_SERVER_PORT, value: {{ .Values.server.service.port | quote }}}
+            - {name: SANDBOX_REGISTRATION_ROUTER_LABEL, value: {{ printf "%s-router" $fullname | quote }}}
+            - {name: SANDBOX_REGISTRATION_IMAGE_PULL_POLICY, value: {{ .Values.sandbox.image.pullPolicy | quote }}}
+            {{- if .Values.router.enabled }}
+            - {name: SANDBOX_ROUTER_SCOPED_TOKEN_SECRET_FILE, value: "/var/run/agent-platform/router-auth/secret"}
+            - {name: SANDBOX_ROUTER_SCOPED_TOKEN_TTL, value: "5m"}
+            {{- end }}
+          {{- if .Values.router.enabled }}
+          volumeMounts:
+            - {name: router-auth, mountPath: /var/run/agent-platform/router-auth, readOnly: true}
+          {{- end }}
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          resources: {{- toYaml .Values.worker.resources | nindent 12 }}
+      {{- if .Values.router.enabled }}
+      volumes:
+        - name: router-auth
+          secret:
+            secretName: {{ default (printf "%s-router-auth" $fullname) .Values.router.auth.secretName }}
+            items: [{key: secret, path: secret}]
+      {{- end }}

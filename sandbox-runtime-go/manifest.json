@@ -1,0 +1,18 @@
+{
+  "contract_version": "agent-platform-runtime/v1",
+  "image_version": "1.0.0",
+  "entrypoint": ["/app/bin/runtime"],
+  "state_format": "go-runtime/1",
+  "capabilities": [
+    "execution",
+    "events",
+    "cancel",
+    "pause_resume",
+    "steering",
+    "artifacts",
+    "files",
+    "skills",
+    "openapi_tools",
+    "mcp_tools"
+  ]
+}

@@ -1,0 +1,11 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+httpx==0.28.1
+pydantic==2.10.4
+python-multipart==0.0.20
+python-dotenv==1.0.1
+pymysql==1.1.1
+# Required by PyMySQL for MySQL 8 caching_sha2_password authentication.
+cryptography>=42.0.0,<45.0.0
+redis==5.2.1
+minio==7.2.15

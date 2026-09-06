@@ -1,0 +1,199 @@
+openapi: 3.1.0
+info:
+  title: Agent Platform Runtime transport
+  version: 1.0.0
+  description: Language-neutral HTTP+JSON transport contract for a Runtime inside one sandbox.
+servers:
+  - url: http://runtime:8888
+paths:
+  /:
+    get:
+      operationId: runtimeHealth
+      responses:
+        '200': { description: Healthy, content: { application/json: { schema: { $ref: '#/components/schemas/Health' } } } }
+  /manifest:
+    get:
+      operationId: getManifest
+      responses:
+        '200': { description: Validated manifest, content: { application/json: { schema: { $ref: '#/components/schemas/Manifest' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /execute:
+    post:
+      operationId: execute
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ExecuteRequest' } } }
+      responses:
+        '200': { description: Process completed, content: { application/json: { schema: { $ref: '#/components/schemas/ExecuteResponse' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '409': { $ref: '#/components/responses/RuntimeConflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+  /cancel:
+    post:
+      operationId: cancel
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ExecutionRequest' } } }
+      responses:
+        '200': { description: Already stopped or idempotent replay, content: { application/json: { schema: { $ref: '#/components/schemas/StoppedResponse' } } } }
+        '202': { description: Process termination accepted, content: { application/json: { schema: { $ref: '#/components/schemas/AcceptedResponse' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+  /upload:
+    post:
+      operationId: upload
+      requestBody:
+        required: true
+        content: { multipart/form-data: { schema: { type: object, required: [file], properties: { file: { type: string, format: binary } } } } }
+      responses:
+        '200': { description: Uploaded, content: { application/json: { schema: { $ref: '#/components/schemas/UploadResponse' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+  /download/{path}:
+    get:
+      operationId: download
+      parameters: [{ $ref: '#/components/parameters/Path' }]
+      responses:
+        '200': { description: File bytes, content: { application/octet-stream: { schema: { type: string, format: binary } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /list/{path}:
+    get:
+      operationId: list
+      parameters: [{ $ref: '#/components/parameters/Path' }]
+      responses:
+        '200': { description: Directory entries, content: { application/json: { schema: { $ref: '#/components/schemas/ListResponse' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /exists/{path}:
+    get:
+      operationId: exists
+      parameters: [{ $ref: '#/components/parameters/Path' }]
+      responses:
+        '200': { description: Existence result, content: { application/json: { schema: { $ref: '#/components/schemas/ExistsResponse' } } } }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+components:
+  parameters:
+    Path: { in: path, name: path, required: true, schema: { type: string } }
+  responses:
+    InvalidRequest: { description: Malformed JSON, missing field, invalid content type or path escape, content: { application/json: { schema: { $ref: '#/components/schemas/TransportError' } } } }
+    NotFound: { description: Path or file was not found, content: { application/json: { schema: { $ref: '#/components/schemas/TransportError' } } } }
+    RuntimeConflict: { description: Another execution is already running, content: { application/json: { schema: { $ref: '#/components/schemas/TransportError' } } } }
+    PayloadTooLarge: { description: Request exceeds 4 MiB, content: { application/json: { schema: { $ref: '#/components/schemas/TransportError' } } } }
+  schemas:
+    RunConfig:
+      type: object
+      additionalProperties: false
+      required: [contract_version, run_id, stage, fence, execution_id, model, runtime, limits]
+      properties:
+        contract_version: { const: agent-platform-runtime/v1 }
+        run_id: { type: string }
+        stage: { type: integer, minimum: 1 }
+        fence: { type: integer }
+        execution_id: { type: string }
+        messages: { type: array, items: { type: object } }
+        model: { type: object, additionalProperties: false, required: [name, base_url, token], properties: { name: { type: string }, base_url: { type: string, format: uri }, token: { type: string }, reasoning_effort: { type: string }, context_window_tokens: { type: integer, minimum: 1, maximum: 2097152 }, max_output_tokens: { type: integer, minimum: 1, maximum: 2097152 }, parameters: { type: object, additionalProperties: true, description: Maximum serialized size 64 KiB and nesting depth 32 } } }
+        runtime: { type: object, additionalProperties: false, required: [base_url, token], properties: { base_url: { type: string, format: uri }, token: { type: string } } }
+        limits: { type: object, additionalProperties: false, required: [remaining_execution_seconds], properties: { remaining_execution_seconds: { type: integer, minimum: 1 }, checkpoint_max_bytes: { type: integer, minimum: 0 } } }
+        resume: { type: object, additionalProperties: false, required: [checkpoint_path], properties: { checkpoint_path: { type: string }, input_id: { type: string }, answer: {} } }
+        steering: { type: object, additionalProperties: false, required: [after_seq], properties: { after_seq: { type: integer, minimum: 0 } } }
+        files: { type: array, items: { type: object } }
+        skills: { type: array, items: { type: object } }
+        tools: { type: array, items: { type: object } }
+        result_bundle: { type: [object, 'null'] }
+    Result:
+      type: object
+      additionalProperties: false
+      required: [status, steering]
+      oneOf:
+        - properties: { status: { const: ok }, delivery: { $ref: '#/components/schemas/Delivery' } }
+          required: [summary, delivery]
+        - properties: { status: { const: awaiting_input }, request: { $ref: '#/components/schemas/InputRequest' }, checkpoint: { $ref: '#/components/schemas/Checkpoint' } }
+          required: [request, checkpoint]
+        - properties: { status: { const: error } }
+          required: [error_code]
+      properties:
+        status: { type: string, enum: [ok, awaiting_input, error] }
+        summary: { type: string }
+        delivery: { anyOf: [{ $ref: '#/components/schemas/Delivery' }, { type: 'null' }] }
+        request: { anyOf: [{ $ref: '#/components/schemas/InputRequest' }, { type: 'null' }] }
+        checkpoint: { anyOf: [{ $ref: '#/components/schemas/Checkpoint' }, { type: 'null' }] }
+        steering: { type: object, additionalProperties: false, required: [incorporated_through_seq], properties: { incorporated_through_seq: { type: integer, minimum: 0 } } }
+        error_code: { type: [string, 'null'] }
+        error_type: { type: [string, 'null'] }
+    Delivery:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties: { status: { type: string, enum: [not_requested, empty, uploaded] }, destination_id: { type: string }, sha256: { type: string }, size_bytes: { type: integer, minimum: 0 } }
+    InputRequest:
+      type: object
+      additionalProperties: false
+      required: [kind, prompt]
+      properties: { kind: { type: string, enum: [question, choice, approval] }, prompt: { type: string }, options: { type: array, items: { type: object } } }
+    Checkpoint:
+      type: object
+      additionalProperties: false
+      required: [path, format, sha256, size_bytes]
+      properties: { path: { type: string }, format: { type: string }, sha256: { type: string }, size_bytes: { type: integer, minimum: 0 } }
+    Health:
+      type: object
+      required: [status, version]
+      properties: { status: { const: ok }, version: { type: string } }
+    Manifest:
+      type: object
+      additionalProperties: false
+      required: [contract_version, entrypoint, capabilities]
+      allOf:
+        - required: [capabilities]
+          properties: { capabilities: { contains: { const: execution } } }
+        - properties: { capabilities: { contains: { const: events } } }
+        - properties: { capabilities: { contains: { const: cancel } } }
+        - properties: { capabilities: { contains: { const: pause_resume } } }
+        - properties: { capabilities: { contains: { const: steering } } }
+        - properties: { capabilities: { contains: { const: files } } }
+        - properties: { capabilities: { contains: { const: skills } } }
+        - properties: { capabilities: { contains: { const: openapi_tools } } }
+        - properties: { capabilities: { contains: { const: mcp_tools } } }
+        - properties: { capabilities: { contains: { const: artifacts } } }
+      properties:
+        contract_version: { const: agent-platform-runtime/v1 }
+        image_version: { type: string }
+        entrypoint: { type: array, minItems: 1, items: { type: string } }
+        capabilities: { type: array, uniqueItems: true, items: { type: string, enum: [execution, events, cancel, pause_resume, steering, files, skills, openapi_tools, mcp_tools, artifacts] }, minItems: 10, maxItems: 10 }
+        state_format: { type: string }
+    ExecuteRequest:
+      type: object
+      required: [command]
+      properties: { command: { type: string, minLength: 1 }, execution_id: { type: string } }
+    ExecuteResponse:
+      type: object
+      required: [execution_id, stdout, stderr, exit_code]
+      properties: { execution_id: { type: string }, stdout: { type: string }, stderr: { type: string }, exit_code: { type: integer } }
+    ExecutionRequest:
+      type: object
+      required: [execution_id]
+      properties: { execution_id: { type: string, minLength: 1 } }
+    AcceptedResponse:
+      type: object
+      required: [status, execution_id]
+      properties: { status: { const: accepted }, execution_id: { type: string } }
+    StoppedResponse:
+      type: object
+      required: [status, execution_id]
+      properties: { status: { const: stopped }, execution_id: { type: string } }
+    UploadResponse:
+      type: object
+      required: [status, path]
+      properties: { status: { const: uploaded }, path: { type: string } }
+    ListResponse:
+      type: object
+      required: [path, entries]
+      properties: { path: { type: string }, entries: { type: array, items: { type: string } } }
+    ExistsResponse:
+      type: object
+      required: [exists]
+      properties: { exists: { type: boolean } }
+    TransportError:
+      type: object
+      required: [status, error_code]
+      properties: { status: { const: error }, error_code: { type: string } }

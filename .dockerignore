@@ -1,0 +1,15 @@
+.git/
+.env
+.env.*
+AGENTS.md
+agent-demo/
+charts/
+docs/
+examples/
+sandbox-runtime/*
+!sandbox-runtime/runtime_manifest.v1.json
+scripts/
+web/admin/node_modules/
+web/admin/dist/
+*_test.go
+*.md

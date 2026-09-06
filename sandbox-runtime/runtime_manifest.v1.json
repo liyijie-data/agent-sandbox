@@ -1,0 +1,10 @@
+{
+  "contract_version": "agent-platform-runtime/v1",
+  "image_version": "1.0.0",
+  "entrypoint": ["python", "-m", "agent_runtime"],
+  "state_format": "agent-runtime-reference/1",
+  "capabilities": [
+    "execution", "events", "cancel", "pause_resume", "steering",
+    "files", "skills", "openapi_tools", "mcp_tools", "artifacts"
+  ]
+}

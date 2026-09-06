@@ -1,0 +1,433 @@
+openapi: 3.1.0
+info:
+  title: Agent Platform public API
+  version: 1.0.0
+  description: Public client API only. Admin, internal Runtime, console and model gateway routes are excluded.
+servers:
+  - url: https://platform.example
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/runs:
+    post:
+      operationId: createRun
+      summary: Create or replay a Run
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateRunRequest' }
+      responses:
+        '201': { description: Created, headers: { X-Run-ID: { schema: { type: string } }, X-Trace-ID: { schema: { type: string } } }, content: { application/json: { schema: { $ref: '#/components/schemas/Run' } } } }
+        '200': { description: Idempotent replay, headers: { X-Run-ID: { schema: { type: string } }, X-Trace-ID: { schema: { type: string } } }, content: { application/json: { schema: { $ref: '#/components/schemas/Run' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+  /api/v1/runs/{run_id}:
+    parameters: [{ $ref: '#/components/parameters/RunId' }]
+    get:
+      operationId: getRun
+      summary: Get Run status and available result
+      responses:
+        '200': { description: Run, content: { application/json: { schema: { $ref: '#/components/schemas/Run' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+  /api/v1/runs/{run_id}/events:
+    parameters: [{ $ref: '#/components/parameters/RunId' }]
+    get:
+      operationId: streamRunEvents
+      summary: Stream retained Run events
+      parameters:
+        - in: header
+          name: Last-Event-ID
+          schema: { type: string }
+          description: Opaque cursor from a prior frame for this same Run.
+      responses:
+        '200':
+          description: 'Server-sent event stream. Unnamed data frames are Chat Completions chunks; named frames use the event names documented in API_INTEGRATION_GUIDE.md. The stream ends with data: [DONE].'
+          content:
+            text/event-stream:
+              schema: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '410': { $ref: '#/components/responses/Gone' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+  /api/v1/runs/{run_id}/cancel:
+    parameters: [{ $ref: '#/components/parameters/RunId' }]
+    post:
+      operationId: cancelRun
+      summary: Cancel a Run (idempotent)
+      responses:
+        '202': { description: Cancellation accepted, content: { application/json: { schema: { $ref: '#/components/schemas/CancelResponse' } } } }
+        '200': { description: Already terminal or already stopped, content: { application/json: { schema: { $ref: '#/components/schemas/CancelResponse' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+  /api/v1/runs/{run_id}/steers:
+    parameters: [{ $ref: '#/components/parameters/RunId' }]
+    post:
+      operationId: createSteer
+      summary: Submit or replay an execution-time steer
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/SteerRequest' } }
+      responses:
+        '202': { description: Accepted, content: { application/json: { schema: { $ref: '#/components/schemas/SteerReceipt' } } } }
+        '200': { description: Idempotent replay, content: { application/json: { schema: { $ref: '#/components/schemas/SteerReceipt' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+  /api/v1/runs/{run_id}/steers/{steer_id}:
+    parameters:
+      - { $ref: '#/components/parameters/RunId' }
+      - in: path
+        name: steer_id
+        required: true
+        schema: { type: string, minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9._:-]+$' }
+    get:
+      operationId: getSteer
+      summary: Get a steer receipt
+      responses:
+        '200': { description: Receipt, content: { application/json: { schema: { $ref: '#/components/schemas/SteerReceipt' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+  /api/v1/runs/{run_id}/inputs/{input_id}/answer:
+    parameters:
+      - { $ref: '#/components/parameters/RunId' }
+      - { in: path, name: input_id, required: true, schema: { type: string } }
+    post:
+      operationId: answerRunInput
+      summary: Answer the current human input request
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AnswerRequest' } } }
+      responses:
+        '202': { description: Applied, content: { application/json: { schema: { $ref: '#/components/schemas/AnswerResponse' } } } }
+        '200': { description: Idempotent replay, content: { application/json: { schema: { $ref: '#/components/schemas/AnswerResponse' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '410': { $ref: '#/components/responses/Gone' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+  /api/v1/config/network:
+    get:
+      operationId: getClientNetworkConfig
+      summary: Get the effective client network configuration
+      responses:
+        '200': { description: Configuration, content: { application/json: { schema: { $ref: '#/components/schemas/NetworkConfigResponse' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+    put:
+      operationId: replaceClientNetworkConfig
+      summary: Replace the client network configuration
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/NetworkConfigRequest' } } }
+      responses:
+        '201': { description: Created revision, content: { application/json: { schema: { $ref: '#/components/schemas/NetworkConfigResponse' } } } }
+        '200': { description: Idempotent replay, content: { application/json: { schema: { $ref: '#/components/schemas/NetworkConfigResponse' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+  /api/v1/images/{image_id}/config/network:
+    parameters: [{ $ref: '#/components/parameters/ImageId' }]
+    get:
+      operationId: getImageNetworkConfig
+      summary: Get effective network configuration for an image
+      responses:
+        '200': { description: Configuration, content: { application/json: { schema: { $ref: '#/components/schemas/NetworkConfigResponse' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+    put:
+      operationId: replaceImageNetworkConfig
+      summary: Replace an image network override
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/NetworkConfigRequest' } } }
+      responses:
+        '201': { description: Created revision, content: { application/json: { schema: { $ref: '#/components/schemas/NetworkConfigResponse' } } } }
+        '200': { description: Idempotent replay, content: { application/json: { schema: { $ref: '#/components/schemas/NetworkConfigResponse' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: CLIENT_API_KEY }
+  parameters:
+    RunId: { in: path, name: run_id, required: true, schema: { type: string } }
+    ImageId: { in: path, name: image_id, required: true, schema: { type: string } }
+  responses:
+    BadRequest: { description: Invalid JSON or contract, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+    Unauthorized: { description: Missing, invalid or revoked bearer, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+    NotFound: { description: Resource not found or not owned by caller, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+    Conflict: { description: Idempotency, CAS or state conflict, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+    Gone: { description: Expired content or unusable event cursor, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+    PayloadTooLarge: { description: Request byte limit exceeded, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+    Unprocessable: { description: Image, capability or network policy admission failed, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+    RateLimited: { description: Resource budget exceeded, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+    Unavailable: { description: Storage or platform dependency unavailable, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+    MethodNotAllowed: { description: Method is not supported for this route, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error: { $ref: '#/components/schemas/Error' }
+        req_id: { type: string }
+        trace_id: { type: string }
+    Error:
+      type: object
+      required: [code, message]
+      properties: { code: { type: string }, message: { type: string } }
+    CreateRunRequest:
+      type: object
+      additionalProperties: false
+      required: [req_id, sandbox, messages, model]
+      properties:
+        req_id: { type: string, minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9._:-]+$' }
+        sandbox: { type: object, additionalProperties: false, required: [image_id], properties: { image_id: { type: string } } }
+        messages: { type: array, minItems: 1, items: { $ref: '#/components/schemas/Message' } }
+        model: { $ref: '#/components/schemas/ClientModel' }
+        files: { type: array, maxItems: 32, items: { $ref: '#/components/schemas/ResourceRef' } }
+        skills: { type: array, maxItems: 32, items: { $ref: '#/components/schemas/ResourceRef' } }
+        tools: { type: array, maxItems: 32, items: { $ref: '#/components/schemas/ToolSpec' } }
+        result_bundle: { $ref: '#/components/schemas/ResultBundle' }
+    ClientModel:
+      type: object
+      additionalProperties: false
+      required: [name, base_url, access]
+      properties:
+        name: { type: string }
+        provider: { type: string }
+        base_url: { type: string, format: uri }
+        access: { type: object, additionalProperties: false, required: [api_key, expires_at], properties: { api_key: { type: string }, expires_at: { type: string, format: date-time } } }
+        reasoning_effort: { type: string }
+        context_window_tokens: { type: integer, minimum: 1, maximum: 2097152 }
+        max_output_tokens: { type: integer, minimum: 1, maximum: 2097152 }
+        parameters: { type: object, additionalProperties: true, description: OpenAI-compatible Chat Completions parameters; maximum serialized size 64 KiB and nesting depth 32; runtime-owned fields are rejected }
+    ResourceRef:
+      type: object
+      additionalProperties: false
+      required: [id, name, sha256, size_bytes, download_url, expires_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        size_bytes: { type: integer, minimum: 0 }
+        download_url: { type: string, format: uri }
+        signature_query_keys: { type: array, items: { type: string, pattern: '^[A-Za-z0-9_.-]+$' } }
+        expires_at: { type: string, format: date-time }
+    ToolSpec:
+      type: object
+      additionalProperties: false
+      required: [id, type, target, allowed_operations]
+      oneOf:
+        - title: OpenAPI tool
+          properties: { type: { const: openapi } }
+          required: [base_url, spec]
+        - title: MCP tool
+          properties: { type: { const: mcp } }
+          required: [url, transport]
+      properties:
+        id: { type: string, pattern: '^[A-Za-z0-9._:-]+$' }
+        type: { type: string, enum: [openapi, mcp] }
+        target: { type: string }
+        allowed_operations: { type: array, minItems: 1, items: { type: string } }
+        base_url: { type: string, format: uri }
+        spec: { $ref: '#/components/schemas/ResourceRef' }
+        url: { type: string, format: uri }
+        transport: { type: string, enum: [streamable_http, sse, stdio] }
+        command: { type: string }
+        args: { type: array, items: { type: string } }
+        env: { type: object, additionalProperties: { type: string } }
+    ResultBundle:
+      type: object
+      additionalProperties: false
+      required: [destination_id, upload_url, expires_at]
+      properties:
+        destination_id: { type: string }
+        upload_url: { type: string, format: uri }
+        signature_query_keys: { type: array, items: { type: string } }
+        expires_at: { type: string, format: date-time }
+    Message:
+      type: object
+      additionalProperties: false
+      required: [role]
+      properties:
+        role: { type: string, enum: [system, developer, user, assistant, tool] }
+        content: { type: [string, 'null'] }
+        tool_calls: { type: array, items: { type: object, additionalProperties: false, required: [id, type, function], properties: { id: { type: string }, type: { type: string, enum: [function] }, function: { type: object, additionalProperties: false, required: [name, arguments], properties: { name: { type: string }, arguments: { type: string } } } } } }
+        tool_call_id: { type: [string, 'null'] }
+        files: { type: array, items: { $ref: '#/components/schemas/ResourceRef' } }
+        skills: { type: array, items: { $ref: '#/components/schemas/ResourceRef' } }
+    Run:
+      type: object
+      required: [id, req_id, status, stage, expires_at, content_available, cleanup_status]
+      properties:
+        id: { type: string }
+        req_id: { type: string }
+        status: { type: string, enum: [queued, preparing, running, awaiting_input, cancel_requested, platform_rebasing, succeeded, failed, cancelled, expired] }
+        stage: { type: integer }
+        expires_at: { type: string, format: date-time }
+        pending_input: { $ref: '#/components/schemas/PendingInput' }
+        result: { $ref: '#/components/schemas/ResultSummary' }
+        content_available: { type: boolean }
+        content_expires_at: { type: string, format: date-time }
+        cleanup_status: { type: string, enum: [not_due, pending, running, completed, failed] }
+        queue_position: { type: integer }
+        queue_length: { type: integer }
+        wait_reason: { type: string, enum: [pool_unready, in_client_queue, quota_exceeded] }
+    PendingInput:
+      type: object
+      required: [id, kind, prompt, expires_at]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [question, choice, approval] }
+        prompt: { type: string }
+        options: { type: array, items: { $ref: '#/components/schemas/Choice' } }
+        expires_at: { type: string, format: date-time }
+    Choice:
+      type: object
+      required: [value, label]
+      properties: { value: { type: string }, label: { type: string } }
+    ResultSummary:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [not_requested, empty, uploaded] }
+        destination_id: { type: string }
+        sha256: { type: string }
+        size_bytes: { type: integer }
+        summary: { type: string }
+        error_code: { type: string, enum: [context_limit_exceeded, agent_execution_failed] }
+    CancelResponse:
+      type: object
+      required: [run_id, status]
+      properties: { run_id: { type: string }, status: { $ref: '#/components/schemas/Run/properties/status' } }
+    SteerRequest:
+      type: object
+      additionalProperties: false
+      required: [steer_id, message]
+      properties:
+        steer_id: { type: string, minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9._:-]+$' }
+        message: { $ref: '#/components/schemas/SteerMessage' }
+    SteerReceipt:
+      type: object
+      required: [run_id, steer_id, seq, status, reason_code, accepted_at, incorporated_at]
+      properties:
+        run_id: { type: string }
+        steer_id: { type: string }
+        seq: { type: integer }
+        status: { type: string, enum: [pending, incorporated, not_applied, unknown] }
+        reason_code: { type: [string, 'null'], enum: [run_finished, run_cancelled, run_expired, execution_outcome_unknown, null] }
+        accepted_at: { type: string, format: date-time }
+        incorporated_at: { type: [string, 'null'], format: date-time }
+        stage: { type: integer }
+    SteerMessage:
+      type: object
+      additionalProperties: false
+      required: [role, content]
+      properties:
+        role: { type: string, enum: [user] }
+        content: { type: string, minLength: 1, maxLength: 16384 }
+        tool_calls: { type: array, maxItems: 0 }
+        tool_call_id: { type: 'null' }
+        files: { type: array, items: { $ref: '#/components/schemas/ResourceRef' } }
+        skills: { type: array, items: { $ref: '#/components/schemas/ResourceRef' } }
+    AnswerRequest:
+      type: object
+      additionalProperties: false
+      required: [answer]
+      properties:
+        answer: {}
+        access_refresh: { $ref: '#/components/schemas/AccessRefresh' }
+    AccessRefresh:
+      type: object
+      additionalProperties: false
+      properties:
+        model: { type: object, required: [api_key, expires_at], properties: { api_key: { type: string }, expires_at: { type: string, format: date-time } } }
+        files: { type: array, items: { $ref: '#/components/schemas/ResourceAccess' } }
+        skills: { type: array, items: { $ref: '#/components/schemas/ResourceAccess' } }
+        result_bundle: { type: object, required: [upload_url, expires_at], properties: { upload_url: { type: string, format: uri }, expires_at: { type: string, format: date-time } } }
+    ResourceAccess:
+      type: object
+      required: [id, download_url, expires_at]
+      properties: { id: { type: string }, download_url: { type: string, format: uri }, expires_at: { type: string, format: date-time } }
+    AnswerResponse:
+      type: object
+      required: [applied, idempotent, stage]
+      properties: { applied: { type: boolean }, idempotent: { type: boolean }, stage: { type: integer } }
+    NetworkConfigRequest:
+      type: object
+      additionalProperties: false
+      required: [req_id, network_policy]
+      properties:
+        req_id: { type: string, minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9._:-]+$' }
+        expected_active_revision: { type: [string, 'null'] }
+        host_aliases: { type: array, maxItems: 32, items: { $ref: '#/components/schemas/HostAlias' } }
+        network_policy: { $ref: '#/components/schemas/NetworkPolicy' }
+    HostAlias:
+      type: object
+      required: [hostname, ip]
+      properties: { hostname: { type: string }, ip: { type: string } }
+    NetworkPolicy:
+      type: object
+      properties:
+        egress: { type: array, maxItems: 32, items: { $ref: '#/components/schemas/EgressRule' } }
+    EgressRule:
+      type: object
+      required: [cidr, ports]
+      properties:
+        cidr: { type: string }
+        ports: { type: array, minItems: 1, items: { $ref: '#/components/schemas/PortRule' } }
+    PortRule:
+      type: object
+      required: [protocol, port]
+      properties: { protocol: { type: string, enum: [TCP, UDP] }, port: { type: integer, minimum: 1, maximum: 65535 } }
+    NetworkConfigResponse:
+      type: object
+      required: [scope, source, revision, rollout_status, host_aliases, network_policy]
+      properties:
+        scope: { type: string, enum: [client, image] }
+        source: { type: string, enum: [client, image, default] }
+        revision_id: { type: string }
+        revision: { type: integer }
+        rollout_status: { type: string }
+        host_aliases: { type: array, items: { $ref: '#/components/schemas/HostAlias' } }
+        network_policy: { $ref: '#/components/schemas/NetworkPolicy' }

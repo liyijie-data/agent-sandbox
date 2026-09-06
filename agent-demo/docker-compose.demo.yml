@@ -1,0 +1,39 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: agent_demo
+      MYSQL_USER: agent_demo
+      MYSQL_PASSWORD: agent_demo_local
+      MYSQL_ROOT_PASSWORD: root_local_only
+    ports: ["3307:3306"]
+    volumes: ["demo-mysql:/var/lib/mysql"]
+  redis:
+    image: redis:7-alpine
+    ports: ["6380:6379"]
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports: ["9002:9000", "9003:9001"]
+    volumes: ["demo-minio:/data"]
+  backend:
+    build: ./backend
+    env_file: ./backend/.env
+    environment:
+      MYSQL_DSN: mysql://agent_demo:agent_demo_local@mysql:3306/agent_demo
+      REDIS_URL: redis://redis:6379/1
+      S3_ENDPOINT: minio:9000
+    depends_on: [mysql, redis, minio]
+    ports: ["8000:8000"]
+  frontend:
+    build: ./frontend
+    depends_on: [backend]
+    environment:
+      VITE_BFF_URL: http://backend:8000
+    ports: ["5173:5173"]
+volumes:
+  demo-mysql: {}
+  demo-minio: {}

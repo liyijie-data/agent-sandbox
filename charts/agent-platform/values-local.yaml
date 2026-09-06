@@ -1,0 +1,128 @@
+# values-local.yaml — 本地部署配置模板
+# 所有 CHANGE_ME 项为 [必填]，部署前须替换为实际值；
+# 各字段默认值/单位/必填说明见同目录 CONFIGURATION.md。
+# 本地镜像（control-plane / sandbox-runtime）按 Makefile 直接命令构建。
+
+imagePullSecrets: []
+secret:
+  create: true
+  name: agent-platform-local-env
+  data:
+    # [必填] 服务间调用令牌（任意长度随机串）。
+    SERVICE_TOKEN: "CHANGE_ME"
+    # [必填] 内容加密主密钥：32 字节密钥的 base64（AES-256）。
+    CREDENTIAL_ENCRYPTION_KEY: "CHANGE_ME_BASE64_32B"
+    # [必填] PostgreSQL 连接串（本地 compose 示例，按环境替换）。
+    DATABASE_DSN: postgres://agent:agent@host.docker.internal:2345/agent_platform?sslmode=disable
+    DATABASE_DRIVER: postgres
+    # [必填] Redis 地址（本地 compose 示例）。
+    REDIS_URL: redis://host.docker.internal:9736/0
+    # [必填] S3 兼容对象存储：端点与凭据按环境填写（本地 minio 示例）。
+    S3_ENDPOINT: host.docker.internal:10009
+    S3_PUBLIC_ENDPOINT: 127.0.0.1:10009
+    S3_SANDBOX_ENDPOINT: host.docker.internal:10009
+    S3_REGION: us-east-1
+    S3_BUCKET: agent-platform
+    S3_ACCESS_KEY_ID: minioadmin
+    S3_SECRET_ACCESS_KEY: minioadmin
+    S3_USE_SSL: "false"
+    S3_PRESIGN_TTL: 15m
+    # [必填] 沙箱路由令牌（启用 router 时）。
+    SANDBOX_ROUTER_SCOPED_TOKEN_SECRET: "CHANGE_ME"
+    # [必填] 内容加密/指纹 HMAC/令牌签名密钥（均为 base64）。
+    CONTENT_ENCRYPTION_KEY: "CHANGE_ME_BASE64"
+    FINGERPRINT_HMAC_KEY: "CHANGE_ME_BASE64"
+    TOKEN_SIGNING_SECRET: "CHANGE_ME_BASE64"
+
+server:
+  # 本地构建的镜像仓库名（如需推送/拉取私有库，替换为实际镜像库地址）。
+  image: {repository: agent-platform/control-plane, tag: dev, digest: "", pullPolicy: IfNotPresent}
+  replicas: 1
+  service:
+    type: NodePort
+    port: 8080
+    nodePort: 30080
+    consolePort: 8090
+    consoleNodePort: 30081
+  env:
+    APP_ENV: development
+    ALLOW_INSECURE_AUTH: "false"
+    TZ: Asia/Shanghai
+    # [必填] 允许的模型上游白名单（逗号分隔）；留默认则使用代码内置默认值。
+    MODEL_ALLOWED_UPSTREAM: https://model-upstream.example.com/v1
+    MODEL_MAX_REQUESTS: "100"
+    MODEL_TOKEN_TTL: 35m
+    # [必填] 私有镜像解析器地址；无则留空。
+    REGISTRY_RESOLVER_HOST: http://host.docker.internal:15000
+    ARTIFACT_TTL: 3h
+    ARTIFACT_CLEANUP_INTERVAL: 1m
+    FILE_TTL: 24h
+    FILE_CLEANUP_INTERVAL: 1m
+  resources: {}
+
+worker:
+  image: {repository: agent-platform/control-plane, tag: dev, digest: "", pullPolicy: IfNotPresent}
+  replicas: 1
+  env:
+    APP_ENV: development
+    SANDBOX_ROLLOUT_ENABLED: "true"
+    ALLOW_INSECURE_AUTH: "false"
+    TZ: Asia/Shanghai
+    WORKER_POLL_INTERVAL: 1s
+    WORKER_CONCURRENCY: "4"
+    WORKER_LEASE_TTL: 60s
+    WORKER_HEARTBEAT_INTERVAL: 20s
+    WORKER_MAX_ATTEMPTS: "3"
+    SANDBOX_EXECUTION_TIMEOUT: 30m
+    SANDBOX_REQUEST_TIMEOUT: 30m
+  warmPool: ""
+  sandboxAPIURL: ""
+  resources: {}
+
+router:
+  enabled: true
+  namespace: agent-sandbox
+  auth:
+    secretName: ""
+  image: {repository: us-central1-docker.pkg.dev/k8s-staging-images/agent-sandbox/sandbox-router-go, tag: latest-main, pullPolicy: IfNotPresent}
+  replicas: 1
+  env:
+    PROXY_TIMEOUT_SECONDS: "1800"
+    WEBSOCKET_IDLE_TIMEOUT_SECONDS: "3600"
+    WEBSOCKET_MAX_LIFETIME_SECONDS: "86400"
+    WEBSOCKET_MAX_MESSAGE_BYTES: "16777216"
+  resources: {requests: {cpu: 250m, memory: 512Mi}, limits: {cpu: "1000m", memory: 1Gi}}
+
+sandbox:
+  # 沙箱运行时镜像；本地可用 `make docker-sandbox-k8s` 构建的
+  # agent-platform/sandbox-runtime:k8s 作为 fallback。
+  image: {repository: agent-platform/sandbox-runtime, tag: k8s, pullPolicy: IfNotPresent}
+  resources:
+    requests: {cpu: 250m, memory: 512Mi, ephemeral-storage: 512Mi}
+    limits: {cpu: "2", memory: 4Gi}
+  hostAliases: []
+
+warmPool:
+  replicas: 0
+  budget: 4
+  maxPerImage: 2
+  defaultPool: 0
+
+# 按镜像的预热池：每个条目渲染 SandboxTemplate + SandboxWarmPool。
+# 需在平台注册镜像时使用与 warm-pool 一致的名字（bootstrap -warm-pool）。
+warmPools: []
+
+platformNetwork:
+  controlPlaneServiceCIDR: ""
+  kubeDNSServiceCIDR: "10.96.0.10/32"
+  podCIDRs: "10.244.0.0/16"
+  serviceCIDRs: "10.96.0.0/12"
+  nodeCIDRs: "172.16.0.0/12"
+  protectedCIDRs: ""
+  businessPrivateCIDRs: ""
+  reservedHostnames: "kubernetes.default.svc,kubernetes.default.svc.cluster.local"
+  ipv6Enabled: false
+  allowDNSDependencies: true
+  registryEndpoint: ""
+  objectStorageCIDR: "192.168.65.254/32"
+  objectStoragePort: 10009

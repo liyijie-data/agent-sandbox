@@ -1,0 +1,104 @@
+{{- $fullname := .Release.Name -}}
+{{- $serverName := printf "%s-server" $fullname -}}
+{{- $templateName := printf "%s-runtime" $fullname -}}
+---
+apiVersion: extensions.agents.x-k8s.io/v1beta1
+kind: SandboxTemplate
+metadata:
+  name: {{ $templateName }}
+  labels: {app: {{ $templateName }}}
+spec:
+  networkPolicy:
+    {{- with .Values.sandbox.extraIngress }}
+    ingress:
+{{ toYaml . | nindent 6 }}
+    {{- end }}
+    egress:
+      - to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: {{ .Release.Namespace }} }}, podSelector: {matchLabels: {app: {{ $serverName }}}}}]
+        ports: [{protocol: TCP, port: {{ .Values.server.service.port }}}]
+{{- if .Values.platformNetwork.controlPlaneServiceCIDR }}
+      - to: [{ipBlock: {cidr: {{ .Values.platformNetwork.controlPlaneServiceCIDR | quote }}}}]
+        ports: [{protocol: TCP, port: {{ .Values.server.service.port }}}]
+{{- end }}
+{{- if .Values.platformNetwork.kubeDNSServiceCIDR }}
+      - to: [{ipBlock: {cidr: {{ .Values.platformNetwork.kubeDNSServiceCIDR | quote }}}}]
+        ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+{{- end }}
+{{- if .Values.platformNetwork.objectStorageCIDR }}
+      - to: [{ipBlock: {cidr: {{ .Values.platformNetwork.objectStorageCIDR | quote }}}}]
+        ports: [{protocol: TCP, port: {{ .Values.platformNetwork.objectStoragePort }} }]
+{{- end }}
+  podTemplate:
+    spec:
+      securityContext: {runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000}
+      {{- with .Values.sandbox.hostAliases }}
+      hostAliases: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: python-runtime
+          image: {{ .Values.sandbox.image.repository }}:{{ .Values.sandbox.image.tag }}
+          imagePullPolicy: {{ .Values.sandbox.image.pullPolicy }}
+          env:
+            - {name: SANDBOX_EXEC_TIMEOUT_SECONDS, value: "1800"}
+          ports: [{containerPort: 8888, name: sandbox}]
+          readinessProbe: {httpGet: {path: /, port: 8888}, periodSeconds: 1}
+          livenessProbe: {httpGet: {path: /, port: 8888}, initialDelaySeconds: 2, periodSeconds: 10}
+          resources: {{- toYaml .Values.sandbox.resources | nindent 12 }}
+          volumeMounts: [{name: workspace, mountPath: /workspace}]
+      restartPolicy: OnFailure
+      volumes:
+        - name: workspace
+          emptyDir: {}
+{{- range .Values.warmPools }}
+---
+apiVersion: extensions.agents.x-k8s.io/v1beta1
+kind: SandboxTemplate
+metadata:
+  name: {{ printf "%s-runtime" .name }}
+  labels: {app: {{ printf "%s-runtime" .name }}}
+spec:
+  networkPolicy:
+    {{- with .extraIngress }}
+    ingress:
+{{ toYaml . | nindent 6 }}
+    {{- end }}
+    egress:
+      - to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: {{ $.Release.Namespace }} }}, podSelector: {matchLabels: {app: {{ $.Release.Name }}-server }}}]
+        ports: [{protocol: TCP, port: {{ $.Values.server.service.port }}}]
+{{- if $.Values.platformNetwork.controlPlaneServiceCIDR }}
+      - to: [{ipBlock: {cidr: {{ $.Values.platformNetwork.controlPlaneServiceCIDR | quote }}}}]
+        ports: [{protocol: TCP, port: {{ $.Values.server.service.port }}}]
+{{- end }}
+{{- if $.Values.platformNetwork.kubeDNSServiceCIDR }}
+      - to: [{ipBlock: {cidr: {{ $.Values.platformNetwork.kubeDNSServiceCIDR | quote }}}}]
+        ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+{{- end }}
+{{- if $.Values.platformNetwork.objectStorageCIDR }}
+      - to: [{ipBlock: {cidr: {{ $.Values.platformNetwork.objectStorageCIDR | quote }}}}]
+        ports: [{protocol: TCP, port: {{ $.Values.platformNetwork.objectStoragePort }} }]
+{{- end }}
+  podTemplate:
+    spec:
+      securityContext: {runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000}
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: python-runtime
+          image: {{ default $.Values.sandbox.image.repository .imageRepository }}:{{ default $.Values.sandbox.image.tag .imageTag }}
+          imagePullPolicy: {{ $.Values.sandbox.image.pullPolicy }}
+          env:
+            - {name: SANDBOX_EXEC_TIMEOUT_SECONDS, value: "1800"}
+          ports: [{containerPort: 8888, name: sandbox}]
+          readinessProbe: {httpGet: {path: /, port: 8888}, periodSeconds: 1}
+          livenessProbe: {httpGet: {path: /, port: 8888}, initialDelaySeconds: 2, periodSeconds: 10}
+          resources: {{- toYaml (default $.Values.sandbox.resources .resources) | nindent 12 }}
+          volumeMounts: [{name: workspace, mountPath: /workspace}]
+      restartPolicy: OnFailure
+      volumes:
+        - name: workspace
+          emptyDir: {}
+{{- end }}

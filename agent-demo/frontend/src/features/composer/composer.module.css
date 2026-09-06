@@ -1,0 +1,373 @@
+/* Composer 特性样式：文档列宽、附件行、slash chips、输入行与弹层。 */
+.composer {
+  position: relative;
+  align-self: center;
+  width: min(var(--content-width), calc(100% - 48px));
+  margin: 0 auto 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+}
+
+.hiddenInput {
+  display: none;
+}
+
+/* ---------------- 已选择资源 ---------------- */
+.selectedResourcesRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.attachmentCard {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: min(100%, 320px);
+  padding: 4px 6px 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+}
+.attachmentName {
+  min-width: 0;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary);
+}
+.attachmentSize {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.attachmentRemove {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  color: var(--text-muted);
+}
+.attachmentRemove:hover {
+  color: #fff;
+  background: var(--text-muted);
+}
+
+/* ---------------- Skill / 工具引用 chip ---------------- */
+.referenceChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 6px 3px 4px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--text-primary);
+  font-size: var(--fs-xs);
+}
+.referenceTag {
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.referenceLabel {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.referenceRemove {
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  color: var(--text-muted);
+}
+.referenceRemove:hover {
+  color: var(--accent);
+  background: var(--accent-soft-strong);
+}
+
+/* ---------------- 输入行 ---------------- */
+.inputRow {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-height: 112px;
+  gap: 6px;
+}
+.actionRow,
+.actionEnd {
+  display: flex;
+  align-items: center;
+}
+.actionRow {
+  justify-content: space-between;
+}
+.actionEnd {
+  gap: 8px;
+}
+.addBtn {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: var(--text-secondary);
+  background: transparent;
+}
+.addBtn:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+.textarea {
+  width: 100%;
+  min-width: 0;
+  resize: none;
+  max-height: 160px;
+  min-height: 76px;
+  padding: 8px 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 15px;
+  line-height: 1.5;
+}
+.textarea:focus {
+  outline: none;
+}
+.sendBtn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  background: var(--accent);
+  font-size: var(--fs-md);
+  font-weight: 500;
+}
+.sendBtn:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+/* ---------------- 引导回执小标签 ---------------- */
+.receiptRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-bottom: 6px;
+}
+.receiptBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+.receiptPending {
+  color: #7c5a00;
+  background: rgba(250, 204, 21, 0.16);
+  border: 1px solid rgba(250, 204, 21, 0.35);
+}
+.receiptIncorporated {
+  color: #166534;
+  background: rgba(34, 197, 94, 0.14);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+}
+.receiptNot_applied {
+  color: #991b1b;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+.receiptUnknown {
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+}
+
+/* ---------------- 引导模式提示 ---------------- */
+.steerToolHint {
+  padding: 2px 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+  border-radius: var(--radius-sm);
+}
+
+.modelSettings { position: relative; }
+.settingsToggle { height: 32px; padding: 0 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-secondary); background: var(--bg-input); font-size: 12px; }
+.settingsToggle:hover:not(:disabled) { color: var(--text-primary); border-color: var(--accent); }
+.settingsPanel { position: absolute; z-index: 25; right: 0; bottom: calc(100% + 8px); width: min(360px, calc(100vw - 48px)); display: grid; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-raised); box-shadow: var(--shadow-pop); }
+.settingsPanel label { display: grid; grid-template-columns: 100px 1fr; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 12px; }
+.settingsPanel input, .settingsPanel select, .settingsPanel textarea { min-width: 0; padding: 5px 7px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-input); color: var(--text-primary); font: inherit; }
+.settingsPanel textarea { min-height: 58px; resize: vertical; font-family: monospace; }
+.settingsPanel small { color: var(--text-muted); line-height: 1.4; }
+.settingsError { display: block; max-width: 320px; padding-top: 4px; color: #f87171; font-size: 12px; line-height: 1.4; }
+
+/* ---------------- 弹层通用 ---------------- */
+.checkbox {
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+}
+.checkboxOn {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: inset 0 0 0 2px var(--bg-elevated);
+}
+
+/* ---------------- SlashPicker ---------------- */
+.picker,
+.resourceMenu {
+  position: absolute;
+  z-index: 20;
+  left: 12px;
+  right: 12px;
+  bottom: calc(100% + 8px);
+  max-height: 300px;
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+  box-shadow: var(--shadow-pop);
+  overflow: hidden;
+}
+.pickerSearch {
+  flex: 0 0 auto;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
+}
+.pickerSearch:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.pickerList {
+  margin-top: 6px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pickerEmpty {
+  padding: 12px;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  text-align: center;
+}
+.pickerOption {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 6px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+.pickerOption:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+.pickerKind,
+.menuKind {
+  flex: 0 0 auto;
+  color: var(--accent);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+}
+.pickerName,
+.menuName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------------- ResourceMenu ---------------- */
+.resourceMenu {
+  bottom: calc(100% + 8px);
+}
+.menuUpload {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+.menuUpload:hover {
+  background: var(--bg-hover);
+}
+.menuGroup {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.menuGroupTitle {
+  padding: 4px 6px 2px;
+  font-size: var(--fs-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.menuEmpty {
+  padding: 6px;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+.menuOption {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+.menuOption:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+@media (max-width: 760px) {
+  .composer {
+    width: calc(100% - 24px);
+    margin: 0 auto 12px;
+  }
+  .sendBtn span {
+    display: none;
+  }
+  .sendBtn {
+    padding: 7px 9px;
+  }
+}

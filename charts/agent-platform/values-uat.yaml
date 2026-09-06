@@ -1,0 +1,127 @@
+# values-uat.yaml — UAT 部署配置模板
+# 本文件是模板：所有 CHANGE_ME 与空 CIDR 均为 [必填]，部署前须按 UAT 环境填写；
+# 字段默认值/单位/必填说明见同目录 CONFIGURATION.md。
+# 原真实凭据、内网 IP、私有镜像库地址已全部移除，请勿回填真实值到版本库。
+
+# 镜像拉取 Secret 名称（需预先在集群创建）；名称以实际为准。
+imagePullSecrets:
+  - name: registry-pull-secret
+registryAuthSecret: registry-pull-secret
+
+secret:
+  create: true
+  name: agent-platform-uat-env
+  data:
+    # [必填] 服务间调用令牌（随机串）。
+    SERVICE_TOKEN: "CHANGE_ME"
+    # [必填] 内容加密主密钥（32 字节密钥的 base64）。
+    CREDENTIAL_ENCRYPTION_KEY: "CHANGE_ME_BASE64_32B"
+    # [必填] 沙箱路由令牌。
+    SANDBOX_ROUTER_SCOPED_TOKEN_SECRET: "CHANGE_ME"
+    # [必填] PostgreSQL 连接串。
+    DATABASE_DSN: "postgres://<user>:<password>@<host>:<port>/agent_platform?sslmode=disable"
+    DATABASE_DRIVER: "postgres"
+    # [必填] Redis 地址。
+    REDIS_URL: "redis://<user>:<password>@<host>:<port>/<db>"
+    # [必填] 内容加密/指纹 HMAC/令牌签名密钥（base64）。
+    CONTENT_ENCRYPTION_KEY: "CHANGE_ME_BASE64"
+    FINGERPRINT_HMAC_KEY: "CHANGE_ME_BASE64"
+    TOKEN_SIGNING_SECRET: "CHANGE_ME_BASE64"
+    # [必填] S3/COS 兼容对象存储端点与凭据。
+    S3_ENDPOINT: "cos.<region>.example.com"
+    S3_PUBLIC_ENDPOINT: "cos.<region>.example.com"
+    S3_SANDBOX_ENDPOINT: "cos.<region>.example.com"
+    S3_REGION: "CHANGE_ME"
+    S3_BUCKET: "CHANGE_ME"
+    S3_ACCESS_KEY_ID: "CHANGE_ME"
+    S3_SECRET_ACCESS_KEY: "CHANGE_ME"
+    S3_USE_SSL: "true"
+    S3_PRESIGN_TTL: 15m
+
+server:
+  # [必填] 镜像仓库与 tag：替换为实际控制面镜像。
+  image: {repository: registry.example.com/agent-platform/control-plane, tag: "CHANGE_ME", digest: "", pullPolicy: IfNotPresent}
+  replicas: 1
+  service:
+    type: ClusterIP
+    port: 8080
+    consolePort: 8090
+  env:
+    # [必填] 私有镜像解析器主机（留空则不启用）。
+    REGISTRY_RESOLVER_HOST: "CHANGE_ME"
+    APP_ENV: uat
+    ALLOW_INSECURE_AUTH: "false"
+    TZ: Asia/Shanghai
+    # [必填] 允许的模型上游白名单（逗号分隔，按 UAT 实际填）。
+    MODEL_ALLOWED_UPSTREAM: https://model-upstream.example.com/v1
+    MODEL_MAX_REQUESTS: "100"
+    MODEL_TOKEN_TTL: 35m
+    ARTIFACT_TTL: 3h
+    ARTIFACT_CLEANUP_INTERVAL: 1m
+    FILE_TTL: 24h
+    FILE_CLEANUP_INTERVAL: 1m
+  resources: {}
+
+worker:
+  # [必填] 镜像仓库与 tag：与控制面一致。
+  image: {repository: registry.example.com/agent-platform/control-plane, tag: "CHANGE_ME", digest: "", pullPolicy: IfNotPresent}
+  replicas: 1
+  sandboxAPIURL: ""
+  env:
+    APP_ENV: uat
+    ALLOW_INSECURE_AUTH: "false"
+    TZ: Asia/Shanghai
+    WORKER_POLL_INTERVAL: 1s
+    WORKER_CONCURRENCY: "4"
+    WORKER_LEASE_TTL: 60s
+    WORKER_HEARTBEAT_INTERVAL: 20s
+    WORKER_MAX_ATTEMPTS: "3"
+    SANDBOX_EXECUTION_TIMEOUT: 30m
+    SANDBOX_REQUEST_TIMEOUT: 30m
+  warmPool: ""
+  resources: {}
+
+router:
+  enabled: true
+  namespace: agent-sandbox
+  auth:
+    secretName: agent-platform-router-auth
+  # [必填] 沙箱路由镜像。
+  image: {repository: registry.example.com/agent-platform/sandbox-router, tag: "CHANGE_ME", pullPolicy: IfNotPresent}
+  replicas: 1
+  env:
+    PROXY_TIMEOUT_SECONDS: "1800"
+    WEBSOCKET_IDLE_TIMEOUT_SECONDS: "3600"
+    WEBSOCKET_MAX_LIFETIME_SECONDS: "86400"
+    WEBSOCKET_MAX_MESSAGE_BYTES: "16777216"
+  resources: {requests: {cpu: 250m, memory: 512Mi}, limits: {cpu: "1000m", memory: 1Gi}}
+
+sandbox:
+  # [必填] 沙箱运行时镜像。
+  image: {repository: registry.example.com/agent-platform/sandbox-runtime, tag: "CHANGE_ME", pullPolicy: IfNotPresent}
+  resources:
+    requests: {cpu: 250m, memory: 512Mi, ephemeral-storage: 512Mi}
+    limits: {cpu: "2", memory: 4Gi}
+  extraIngress: []
+
+warmPool:
+  replicas: 0
+  budget: 4
+  maxPerImage: 2
+  defaultPool: 0
+
+# [必填] 平台网络基线按 UAT 集群实际网段填写；留空表示不使用对应策略。
+platformNetwork:
+  controlPlaneServiceCIDR: ""
+  kubeDNSServiceCIDR: ""
+  podCIDRs: ""
+  serviceCIDRs: ""
+  nodeCIDRs: ""
+  protectedCIDRs: ""
+  businessPrivateCIDRs: ""
+  reservedHostnames: ""
+  ipv6Enabled: false
+  allowDNSDependencies: false
+  registryEndpoint: ""
+  objectStorageCIDR: ""
+  objectStoragePort: 443

@@ -1,0 +1,4 @@
+# DES-04 single-entry transport dependencies.
+# The reference transport uses the Python standard library only
+# (http.server, urllib, cgi, tarfile). FastAPI/uvicorn are not required and are
+# dropped; the reference image stays lean and stdlib-only.

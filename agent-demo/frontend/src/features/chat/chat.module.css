@@ -1,0 +1,491 @@
+/* 聊天特性的全部样式（侧栏 + 工作区 + 线程 + 消息），feature-scoped。 */
+.workspace {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------------- 侧栏 ---------------- */
+.sidebar {
+  width: var(--sidebar-width);
+  flex: 0 0 var(--sidebar-width);
+  display: flex;
+  flex-direction: column;
+  padding: 18px 12px;
+  border-right: 1px solid var(--border-subtle);
+  background: var(--bg-sidebar);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 6px 14px;
+}
+.brandMark {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: #fff;
+  background: var(--accent);
+}
+.brandName {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: var(--text-primary);
+}
+
+.newChatBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  background: var(--accent);
+  font-size: var(--fs-lg);
+  font-weight: 500;
+  transition: background 0.14s ease;
+}
+.newChatBtn:hover {
+  background: var(--accent-hover);
+}
+
+.sideTitle {
+  margin: 22px 6px 6px;
+  font-size: var(--fs-xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.convList {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sideEmpty {
+  padding: 8px 6px;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.convItem,
+.convItemActive {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.convItem:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+.convItemActive {
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.convItemIcon {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+.convItemTitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebarBottom {
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-subtle);
+}
+.settingsEntry,
+.settingsActive {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+.settingsEntry:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+.settingsActive {
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+/* ---------------- 标题栏 ---------------- */
+.chatHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 28px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.headerTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.headerCaret {
+  color: var(--text-muted);
+}
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.iconBtn {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+}
+.iconBtn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+/* ---------------- 线程 ---------------- */
+.thread {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.threadColumn {
+  width: min(var(--content-width), calc(100% - 48px));
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+.threadEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin: 72px 0;
+  color: var(--text-muted);
+  text-align: center;
+  font-size: var(--fs-md);
+}
+.threadEmpty p {
+  padding: 0 24px;
+}
+
+/* ---------------- 用户消息 ---------------- */
+.userRow {
+  display: flex;
+  justify-content: flex-end;
+  margin: 10px 0;
+}
+.userBubble {
+  max-width: 70%;
+  padding: 9px 14px;
+  border-radius: var(--radius-md);
+  background: var(--accent);
+  color: #fff;
+}
+.userContent {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: var(--fs-lg);
+  line-height: 1.55;
+}
+.userChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.userChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: var(--fs-xs);
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+.userChipName {
+  display: inline-block;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+/* ---------------- 助手消息 ---------------- */
+.assistantRow {
+  display: flex;
+  gap: 14px;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.avatar {
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--accent);
+  font-size: 14px;
+  font-weight: 600;
+}
+.assistantBody {
+  flex: 1;
+  min-width: 0;
+}
+.streamingHint {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse {
+  50% { opacity: 0.45; }
+}
+.assistantActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+}
+.assistantAction {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+}
+.assistantAction:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+/* ---------------- 思考过程 ---------------- */
+.reasoning {
+  margin: 2px 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  overflow: hidden;
+}
+.reasoningHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 7px 10px;
+  text-align: left;
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+.reasoningHeader:hover {
+  color: var(--text-primary);
+}
+.reasoningBody {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: var(--fs-md);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+/* ---------------- 工具调用 ---------------- */
+.toolBlock {
+  margin: 2px 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  overflow: hidden;
+}
+.toolHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 7px 10px;
+  text-align: left;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+}
+.toolHeader:hover { color: var(--text-primary); }
+.toolStatus, .toolFailed { margin-left: auto; }
+.toolStatus { color: var(--accent); }
+.toolFailed { color: var(--state-error); }
+.toolBody {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+.toolField + .toolField { margin-top: 10px; }
+.toolFieldLabel { margin-bottom: 4px; color: var(--text-secondary); }
+.toolField pre {
+  margin: 0;
+  padding: 8px;
+  overflow: auto;
+  border-radius: var(--radius-sm);
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  font: inherit;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.toolError { color: var(--state-error); }
+.toolUnavailable { color: var(--text-muted); }
+
+/* ---------------- 人工输入记录 ---------------- */
+.inputRequestBlock, .inputRequestHistory {
+  margin: 2px 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  overflow: hidden;
+}
+.inputRequestHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 7px 10px;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  text-align: left;
+}
+.inputRequestHeader:hover { color: var(--text-primary); }
+.inputRequestBody, .inputRequestHistory { padding: 10px 12px; color: var(--text-secondary); white-space: pre-wrap; word-break: break-word; }
+.inputRequestBlock .inputRequestBody { border-top: 1px solid var(--border); }
+.inputRequestHistoryTitle { margin-bottom: 5px; color: var(--text-muted); font-size: var(--fs-sm); }
+
+/* ---------------- 产物链接 ---------------- */
+.artifactsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.artifactLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--accent);
+  font-size: var(--fs-md);
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.artifactLink:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.artifactIcon {
+  color: var(--text-muted);
+}
+.artifactName {
+  font-weight: 500;
+}
+.artifactDownload {
+  color: var(--text-muted);
+}
+
+/* ---------------- 状态提示 ---------------- */
+.queueNotice {
+  position: sticky;
+  bottom: 8px;
+  align-self: center;
+  margin: 8px;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  font-size: var(--fs-sm);
+  box-shadow: var(--shadow-card);
+}
+.notice {
+  position: sticky;
+  bottom: 8px;
+  align-self: center;
+  margin: 8px;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  color: var(--state-error);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  font-size: var(--fs-sm);
+  box-shadow: var(--shadow-card);
+}
+
+@media (max-width: 760px) {
+  .sidebar {
+    width: 60px;
+    flex-basis: 60px;
+    padding: 14px 8px;
+  }
+  .brandName,
+  .newChatBtn,
+  .sideTitle,
+  .convItemTitle,
+  .settingsEntry span,
+  .settingsActive span {
+    display: none;
+  }
+  .newChatBtn {
+    padding: 9px;
+    font-size: 0;
+  }
+  .convItem,
+  .convItemActive,
+  .settingsEntry,
+  .settingsActive {
+    justify-content: center;
+    padding: 8px 4px;
+  }
+  .chatHeader {
+    padding: 14px 18px 10px;
+  }
+  .threadColumn {
+    width: calc(100% - 32px);
+  }
+}

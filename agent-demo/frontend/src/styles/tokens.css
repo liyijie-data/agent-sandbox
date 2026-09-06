@@ -1,0 +1,67 @@
+:root {
+  /* 背景 */
+  --bg-app: #0f1218;
+  --bg-sidebar: #0b0e13;
+  --bg-elevated: #161a22;
+  --bg-raised: #1a1f29;
+  --bg-input: #12161d;
+  --bg-hover: #1c222c;
+
+  /* 边框与分隔 */
+  --border: #232a35;
+  --border-subtle: #1a2029;
+
+  /* 文本 */
+  --text-primary: #e6e9ef;
+  --text-secondary: #98a2b3;
+  --text-muted: #6b7280;
+  --text-inverse: #ffffff;
+
+  /* 强调色 */
+  --accent: #3572ef;
+  --accent-hover: #2a5fe0;
+  --accent-press: #1f4ccb;
+  --accent-soft: rgba(53, 114, 239, 0.12);
+  --accent-soft-strong: rgba(53, 114, 239, 0.2);
+
+  /* 状态色 */
+  --state-ok: #34c77b;
+  --state-run: #34a7ff;
+  --state-warn: #f0b429;
+  --state-error: #ef5350;
+
+  /* 圆角 */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-full: 999px;
+
+  /* 字体 */
+  --font-sans: -apple-system, "SF Pro Text", "PingFang SC", "Microsoft YaHei",
+    "Segoe UI", Roboto, sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+
+  /* 布局 */
+  --sidebar-width: 240px;
+  --content-width: 740px;
+
+  /* 间距 */
+  --gap-xs: 4px;
+  --gap-sm: 8px;
+  --gap-md: 12px;
+  --gap-lg: 16px;
+  --gap-xl: 24px;
+
+  /* 字号 */
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 13px;
+  --fs-lg: 14px;
+  --fs-xl: 16px;
+  --fs-title: 18px;
+  --fs-page: 24px;
+
+  /* 阴影 */
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.2);
+  --shadow-pop: 0 6px 24px rgba(0, 0, 0, 0.4);
+}

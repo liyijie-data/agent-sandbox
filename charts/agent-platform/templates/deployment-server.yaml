@@ -1,0 +1,154 @@
+{{- $fullname := .Release.Name -}}
+{{- $serverName := printf "%s-server" $fullname -}}
+{{- $workerName := printf "%s-worker" $fullname -}}
+{{- $image := .Values.server.image -}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $serverName }}
+  labels: {app: {{ $serverName }}}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $serverName }}-sandbox-registrar
+  labels: {app: {{ $serverName }}}
+rules:
+  - apiGroups: [extensions.agents.x-k8s.io]
+    resources: [sandboxtemplates, sandboxwarmpools]
+    verbs: [create, get, list, update, patch, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $serverName }}-sandbox-registrar
+  labels: {app: {{ $serverName }}}
+subjects: [{kind: ServiceAccount, name: {{ $serverName }}}]
+roleRef: {kind: Role, name: {{ $serverName }}-sandbox-registrar, apiGroup: rbac.authorization.k8s.io}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $serverName }}
+  labels: {app: {{ $serverName }}}
+spec:
+  type: {{ .Values.server.service.type }}
+  selector: {app: {{ $serverName }}}
+  ports:
+    - name: http
+      port: {{ .Values.server.service.port }}
+      targetPort: http
+      {{- with .Values.server.service.nodePort }}
+      nodePort: {{ . }}
+      {{- end }}
+    {{- with .Values.server.service.consolePort }}
+    - name: console
+      port: {{ . }}
+      targetPort: console
+      {{- with $.Values.server.service.consoleNodePort }}
+      nodePort: {{ . }}
+      {{- end }}
+    {{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $serverName }}
+  labels: {app: {{ $serverName }}}
+spec:
+  replicas: {{ .Values.server.replicas }}
+  selector: {matchLabels: {app: {{ $serverName }}}}
+  template:
+    metadata: {labels: {app: {{ $serverName }}}}
+    spec:
+      serviceAccountName: {{ $serverName }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.server.hostAliases }}
+      hostAliases:
+        {{- range . }}
+        - ip: {{ .ip }}
+          hostnames: {{ toJson .hostnames }}
+        {{- end }}
+      {{- end }}
+      initContainers:
+        - name: migrate
+          image: {{ if $image.digest }}{{ $image.repository }}@{{ $image.digest }}{{ else }}{{ $image.repository }}:{{ $image.tag }}{{ end }}
+          imagePullPolicy: {{ $image.pullPolicy }}
+          args: [migrate-rebuilt]
+          envFrom: [{secretRef: {name: {{ required "secret.name is required" .Values.secret.name }}}}]
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+      containers:
+        - name: server
+          image: {{ if $image.digest }}{{ $image.repository }}@{{ $image.digest }}{{ else }}{{ $image.repository }}:{{ $image.tag }}{{ end }}
+          imagePullPolicy: {{ $image.pullPolicy }}
+          args: [server]
+          ports:
+            - {name: http, containerPort: {{ .Values.server.service.port }}}
+            {{- with .Values.server.service.consolePort }}
+            - {name: console, containerPort: {{ . }}}
+            {{- end }}
+          envFrom: [{secretRef: {name: {{ required "secret.name is required" .Values.secret.name }}}}]
+          env:
+            {{- range $key, $value := .Values.server.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{ end }}
+            - {name: HTTP_ADDR, value: {{ printf ":%v" .Values.server.service.port | quote }}}
+            {{- with .Values.server.service.consolePort }}
+            - {name: CONSOLE_ADDR, value: {{ printf ":%v" . | quote }}}
+            {{- end }}
+            - {name: MODEL_GATEWAY_BASE_URL, value: {{ printf "http://%s:%v/internal/model/v1" $serverName .Values.server.service.port | quote }}}
+            - {name: RUNTIME_GATEWAY_BASE_URL, value: {{ printf "http://%s:%v/internal/v1/runtime" $serverName .Values.server.service.port | quote }}}
+            - {name: V1_RUNTIME_BASE_URL, value: {{ printf "http://%s:%v/internal/v1/runtime" $serverName .Values.server.service.port | quote }}}
+            - {name: K8S_NAMESPACE, value: {{ .Release.Namespace | quote }}}
+            - {name: SANDBOX_REGISTRATION_SERVER_LABEL, value: {{ $serverName | quote }}}
+            - {name: SANDBOX_REGISTRATION_ROUTER_LABEL, value: {{ printf "%s-router" $fullname | quote }} }
+            - {name: SANDBOX_REGISTRATION_SERVER_PORT, value: {{ .Values.server.service.port | quote }}}
+            - {name: SANDBOX_REGISTRATION_WARM_POOL_REPLICAS, value: {{ .Values.warmPool.replicas | quote }}}
+            - {name: PLATFORM_WARM_POOL_BUDGET, value: {{ .Values.warmPool.budget | quote }}}
+            - {name: PLATFORM_WARM_POOL_MAX_PER_IMAGE, value: {{ .Values.warmPool.maxPerImage | quote }}}
+            - {name: PLATFORM_WARM_POOL_DEFAULT_POOL, value: {{ .Values.warmPool.defaultPool | quote }}}
+            - {name: SANDBOX_REGISTRATION_IMAGE_PULL_POLICY, value: {{ .Values.sandbox.image.pullPolicy | quote }}}
+            - {name: PLATFORM_POD_CIDRS, value: {{ .Values.platformNetwork.podCIDRs | quote }}}
+            - {name: PLATFORM_SERVICE_CIDRS, value: {{ .Values.platformNetwork.serviceCIDRs | quote }}}
+            - {name: PLATFORM_NODE_CIDRS, value: {{ .Values.platformNetwork.nodeCIDRs | quote }}}
+            - {name: PLATFORM_PROTECTED_CIDRS, value: {{ .Values.platformNetwork.protectedCIDRs | quote }}}
+            - {name: PLATFORM_BUSINESS_PRIVATE_CIDRS, value: {{ .Values.platformNetwork.businessPrivateCIDRs | quote }}}
+            - {name: PLATFORM_RESERVED_HOSTNAMES, value: {{ .Values.platformNetwork.reservedHostnames | quote }}}
+            - {name: PLATFORM_IPV6_ENABLED, value: {{ .Values.platformNetwork.ipv6Enabled | quote }}}
+            - {name: PLATFORM_ALLOW_DNS_DEPENDENCIES, value: {{ .Values.platformNetwork.allowDNSDependencies | quote }}}
+            - {name: PLATFORM_REGISTRY_ENDPOINT, value: {{ .Values.platformNetwork.registryEndpoint | quote }}}
+            {{- with .Values.registryAuthSecret }}
+            - {name: PLATFORM_REGISTRY_AUTH_FILE, value: "/var/run/agent-platform/registry/.dockercfg"}
+            {{- end }}
+            - {name: PLATFORM_OBJECT_STORAGE_CIDR, value: {{ .Values.platformNetwork.objectStorageCIDR | quote }}}
+            - {name: PLATFORM_OBJECT_STORAGE_PORT, value: {{ .Values.platformNetwork.objectStoragePort | quote }}}
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          {{- with .Values.registryAuthSecret }}
+          volumeMounts:
+            - name: registry-auth
+              mountPath: /var/run/agent-platform/registry
+              readOnly: true
+          {{- end }}
+          readinessProbe: {httpGet: {path: /healthz, port: http}, initialDelaySeconds: 3, periodSeconds: 5}
+          resources: {{- toYaml .Values.server.resources | nindent 12 }}
+      {{- with .Values.registryAuthSecret }}
+      volumes:
+        - name: registry-auth
+          secret:
+            secretName: {{ . }}
+      {{- end }}

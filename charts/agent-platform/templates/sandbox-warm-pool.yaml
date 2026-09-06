@@ -1,0 +1,23 @@
+{{- $fullname := .Release.Name -}}
+{{- $templateName := printf "%s-runtime" $fullname -}}
+{{- $poolName := default (printf "%s-warm-pool" $fullname) .Values.worker.warmPool -}}
+---
+apiVersion: extensions.agents.x-k8s.io/v1beta1
+kind: SandboxWarmPool
+metadata:
+  name: {{ $poolName }}
+  labels: {app: {{ $poolName }}}
+spec:
+  replicas: 0
+  sandboxTemplateRef: {name: {{ $templateName }}}
+{{- range .Values.warmPools }}
+---
+apiVersion: extensions.agents.x-k8s.io/v1beta1
+kind: SandboxWarmPool
+metadata:
+  name: {{ .name }}
+  labels: {app: {{ .name }}}
+spec:
+  replicas: {{ if hasKey . "replicas" }}{{ .replicas }}{{ else }}0{{ end }}
+  sandboxTemplateRef: {name: {{ printf "%s-runtime" .name }}}
+{{- end }}

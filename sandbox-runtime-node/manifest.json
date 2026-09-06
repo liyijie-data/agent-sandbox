@@ -1,0 +1,1 @@
+{"contract_version":"agent-platform-runtime/v1","image_version":"1.2.0","entrypoint":["node","/app/execute.mjs"],"state_format":"node-runtime/1","capabilities":["execution","events","cancel","pause_resume","steering","artifacts","files","skills","openapi_tools","mcp_tools"]}

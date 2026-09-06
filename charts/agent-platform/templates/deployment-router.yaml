@@ -1,0 +1,106 @@
+{{- $fullname := .Release.Name -}}
+{{- $workerName := printf "%s-worker" $fullname -}}
+{{- $routerName := printf "%s-router" $fullname -}}
+{{- if .Values.router.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $routerName }}
+  namespace: {{ .Values.router.namespace }}
+  labels: {app: {{ $routerName }}}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $routerName }}-sandbox-reader
+  namespace: {{ .Release.Namespace }}
+  labels: {app: {{ $routerName }}}
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $routerName }}-sandbox-reader
+  namespace: {{ .Release.Namespace }}
+  labels: {app: {{ $routerName }}}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $routerName }}
+    namespace: {{ .Values.router.namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $routerName }}-sandbox-reader
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $routerName }}
+  namespace: {{ .Values.router.namespace }}
+  labels: {app: {{ $routerName }}}
+spec:
+  selector: {app: {{ $routerName }}}
+  ports: [{name: http, port: 8080, targetPort: 8080}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $routerName }}
+  namespace: {{ .Values.router.namespace }}
+  labels: {app: {{ $routerName }}}
+spec:
+  replicas: {{ .Values.router.replicas }}
+  selector: {matchLabels: {app: {{ $routerName }}}}
+  template:
+    metadata: {labels: {app: {{ $routerName }}}}
+    spec:
+      serviceAccountName: {{ $routerName }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: router
+          image: {{ .Values.router.image.repository }}:{{ .Values.router.image.tag }}
+          imagePullPolicy: {{ .Values.router.image.pullPolicy }}
+          env:
+            {{- range $key, $value := .Values.router.env }}
+            - {name: {{ $key }}, value: {{ $value | quote }}}
+            {{ end }}
+          args:
+            - --authz-mode=scoped-token
+            - --authz-scoped-token-secret-file=/var/run/agent-platform/router-auth/secret
+            - --cache-enabled=true
+            - --cache-namespace={{ .Release.Namespace }}
+            - --proxy-timeout=30m
+            - --response-header-timeout=30m
+          volumeMounts:
+            - {name: router-auth, mountPath: /var/run/agent-platform/router-auth, readOnly: true}
+          ports: [{name: proxy, containerPort: 8080}, {name: healthz, containerPort: 8081}]
+          readinessProbe: {httpGet: {path: /readyz, port: 8081}, initialDelaySeconds: 5, periodSeconds: 5}
+          livenessProbe: {httpGet: {path: /healthz, port: 8081}, initialDelaySeconds: 10, periodSeconds: 10}
+          resources: {{- toYaml .Values.router.resources | nindent 12 }}
+      volumes:
+        - name: router-auth
+          secret:
+            secretName: {{ default (printf "%s-router-auth" $fullname) .Values.router.auth.secretName }}
+            items: [{key: secret, path: secret}]
+      securityContext: {runAsUser: 1000, runAsGroup: 1000}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ printf "%s-router-worker-only" $fullname }}
+  namespace: {{ .Values.router.namespace }}
+  labels: {app: {{ $routerName }}}
+spec:
+  podSelector: {matchLabels: {app: {{ $routerName }}}}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: {{ .Release.Namespace }}}}
+          podSelector: {matchLabels: {app: {{ $workerName }}}}
+      ports: [{protocol: TCP, port: 8080}]
+{{- end }}
