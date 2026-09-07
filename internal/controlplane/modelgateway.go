@@ -99,6 +99,7 @@ func (s *Server) handleModelChatCompletions(w http.ResponseWriter, r *http.Reque
 	frozenModel := gw.FrozenModel
 	upstreamRaw := gw.UpstreamBase
 	upstreamKey := gw.UpstreamKey
+	upstreamProvider := ""
 	if frozenModel == "" {
 		frozen, err := s.runs.FrozenModel(r.Context(), claims.RunID)
 		if err != nil {
@@ -114,6 +115,7 @@ func (s *Server) handleModelChatCompletions(w http.ResponseWriter, r *http.Reque
 		frozenModel = frozen.Name
 		upstreamRaw = frozen.BaseURL
 		upstreamKey = frozen.Access.APIKey
+		upstreamProvider = frozen.Provider
 	}
 	if err := modelgateway.ValidateChatCompletions(r.Method, path, m.Model, frozenModel); err != nil {
 		s.log.Warn("model gateway: surface/model mismatch", "run", claims.RunID,
@@ -190,8 +192,12 @@ func (s *Server) handleModelChatCompletions(w http.ResponseWriter, r *http.Reque
 		if ac := r.Header.Get("Accept"); ac != "" {
 			req.Header.Set("Accept", ac)
 		}
+		req.Header.Set("User-Agent", "agent-platform/1")
 		if upstreamKey != "" {
 			req.Header.Set("Authorization", "Bearer "+upstreamKey)
+		}
+		if upstreamProvider == "opencode-go" {
+			req.Header.Set("x-opencode-session", claims.RunID)
 		}
 		resp, err = client.Do(req)
 		if err == nil {
