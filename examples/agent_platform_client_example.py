@@ -236,8 +236,8 @@ def run(args: argparse.Namespace) -> None:
         payload.setdefault("files", []).append(ref)
     for value in args.skill or []:
         path = Path(value)
-        if path.suffix.lower() != ".zip":
-            raise ValueError(f"skill must be a .zip archive: {path}")
+        if path.suffix.lower() not in {".zip", ".md"}:
+            raise ValueError(f"skill must be a .md file or .zip archive: {path}")
         ref = storage.put_file(path, f"agent-platform-client/inputs/{transfer_id}/skills/{path.name}")
         payload.setdefault("skills", []).append(ref)
     result_id = f"result-{uuid.uuid4()}"
@@ -295,7 +295,7 @@ def build_parser() -> argparse.ArgumentParser:
     def add_create_options(command: argparse.ArgumentParser) -> None:
         command.add_argument("--prompt", required=True); command.add_argument("--req-id"); command.add_argument("--model-name"); command.add_argument("--model-base-url"); command.add_argument("--model-access-api-key", help="defaults to MODEL_ACCESS_API_KEY"); command.add_argument("--model-access-expires-at"); command.add_argument("--reasoning-effort"); command.add_argument("--resource-ref", type=json_value, action="append", help='ResourceRef JSON; add "kind":"skill" for skills'); command.add_argument("--tool", type=json_value, dest="tools", action="append"); command.add_argument("--result-bundle", type=json_value)
     p = commands.add_parser("create", help="create a Run"); add_create_options(p); p.set_defaults(handler=create)
-    p = commands.add_parser("run", help="create, stream, then verify/download a result bundle"); add_create_options(p); p.add_argument("--file", action="append", help="local input file; repeatable"); p.add_argument("--skill", action="append", help="local skill ZIP; repeatable"); p.add_argument("--output-dir", default="./agent-platform-output"); p.add_argument("--reconnect-delay", type=float, default=1.0); p.add_argument("--max-reconnects", type=int, default=-1); p.set_defaults(handler=run)
+    p = commands.add_parser("run", help="create, stream, then verify/download a result bundle"); add_create_options(p); p.add_argument("--file", action="append", help="local input file; repeatable"); p.add_argument("--skill", action="append", help="local skill .md or ZIP; repeatable"); p.add_argument("--output-dir", default="./agent-platform-output"); p.add_argument("--reconnect-delay", type=float, default=1.0); p.add_argument("--max-reconnects", type=int, default=-1); p.set_defaults(handler=run)
     p = commands.add_parser("get", help="query a Run"); p.add_argument("run_id"); p.set_defaults(handler=lambda a: print_json(platform(a).get_run(a.run_id)))
     p = commands.add_parser("events", help="stream SSE with Last-Event-ID reconnect"); p.add_argument("run_id"); p.add_argument("--last-event-id"); p.add_argument("--reconnect-delay", type=float, default=1.0); p.add_argument("--max-reconnects", type=int, default=-1); p.set_defaults(handler=event_stream)
     p = commands.add_parser("answer", help="answer agent.request_input"); p.add_argument("run_id"); p.add_argument("input_id"); p.add_argument("--answer", type=json_value, required=True); p.add_argument("--access-refresh", type=json_value); p.set_defaults(handler=lambda a: print_json(platform(a).answer(a.run_id, a.input_id, a.answer, a.access_refresh)))

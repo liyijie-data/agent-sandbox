@@ -175,9 +175,15 @@ func skill(ctx context.Context, ws string, r contracts.ResourceRef, resume bool)
 		return e
 	}
 	os.MkdirAll(tmp, 0755)
-	if e := extract(ap, tmp); e != nil {
+	var extractErr error
+	if strings.EqualFold(filepath.Ext(r.Name), ".md") {
+		extractErr = extractMarkdown(ap, tmp)
+	} else {
+		extractErr = extract(ap, tmp)
+	}
+	if extractErr != nil {
 		os.RemoveAll(tmp)
-		return e
+		return extractErr
 	}
 	old := dst + ".old"
 	os.RemoveAll(old)
@@ -188,6 +194,36 @@ func skill(ctx context.Context, ws string, r contracts.ResourceRef, resume bool)
 		return e
 	}
 	os.RemoveAll(old)
+	return nil
+}
+func extractMarkdown(path, dst string) error {
+	st, e := os.Stat(path)
+	if e != nil {
+		return e
+	}
+	if st.Size() > maxSkillMD {
+		return bad("skill_limit_exceeded", "SKILL.md")
+	}
+	in, e := os.Open(path)
+	if e != nil {
+		return e
+	}
+	defer in.Close()
+	out, e := os.Create(filepath.Join(dst, "SKILL.md"))
+	if e != nil {
+		return e
+	}
+	_, copyErr := io.Copy(out, io.LimitReader(in, maxSkillMD+1))
+	closeErr := out.Close()
+	if copyErr != nil {
+		return copyErr
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	if _, e := os.Stat(filepath.Join(dst, "SKILL.md")); e != nil {
+		return e
+	}
 	return nil
 }
 func fileHash(p string) (string, error) {

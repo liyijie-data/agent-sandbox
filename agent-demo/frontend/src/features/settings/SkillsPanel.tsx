@@ -46,7 +46,7 @@ export default function SkillsPanel({ readySkills, upload }: SkillsPanelProps) {
             compact
             icon={<Sparkle size={20} />}
             title="暂无 Skill"
-            description="上传 Skill 压缩包后，Agent 即可按需调度该能力。"
+            description="上传 Skill 文件后，Agent 即可按需调度该能力。"
             action={
               <Button size="sm" variant="outline" onClick={pickFile}>
                 上传 Skill
@@ -76,12 +76,12 @@ export default function SkillsPanel({ readySkills, upload }: SkillsPanelProps) {
         <input
           ref={fileRef}
           type="file"
-          accept=".zip"
+          accept=".zip,.md"
           className={styles.hiddenInput}
           onChange={(e) => void handleFile(e.target.files?.[0])}
         />
         <p className={styles.hint}>
-          上传一个 .zip 压缩包，其中包含 SKILL.md 与所需资源。
+          上传一个 .md 文件或包含 SKILL.md 与所需资源的 .zip 压缩包。
         </p>
         <button
           type="button"
@@ -91,9 +91,9 @@ export default function SkillsPanel({ readySkills, upload }: SkillsPanelProps) {
         >
           <CloudArrowUp size={22} />
           <span className={styles.dropzoneTitle}>
-            {uploading ? "上传中…" : "选择 .zip 文件并上传"}
+            {uploading ? "上传中…" : "选择 .md 或 .zip 文件并上传"}
           </span>
-          <span className={styles.dropzoneHint}>支持 SKILL.zip 格式</span>
+          <span className={styles.dropzoneHint}>支持 .md / .zip 格式</span>
         </button>
         {error ? <div className={styles.error}>{error}</div> : null}
         {done ? <div className={styles.success}>{done}</div> : null}
