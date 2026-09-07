@@ -86,6 +86,18 @@ func (r *Runner) DriftCheckWarmPools(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	revisions := make(map[string]warmPoolNetworkRevisions, len(images))
+	for i := range images {
+		current, rerr := r.effectiveRevisionForImage(ctx, &images[i])
+		if rerr != nil {
+			return rerr
+		}
+		desired, rerr := r.desiredRevisionForImage(ctx, &images[i])
+		if rerr != nil {
+			return rerr
+		}
+		revisions[images[i].ID] = warmPoolNetworkRevisions{current: current, desired: desired}
+	}
 	for i := range images {
 		if images[i].Repository == nil || *images[i].Repository == "" {
 			continue
@@ -101,12 +113,21 @@ func (r *Runner) DriftCheckWarmPools(ctx context.Context) error {
 	for i := range profiles {
 		p := &profiles[i]
 
-		if p.Status == profileFailed {
-			continue
-		}
 		want, ok := desired[p.ImageRegistrationID]
 		if !ok {
 			continue
+		}
+		revs, ok := revisions[p.ImageRegistrationID]
+		if !ok {
+			continue
+		}
+		current := ptrEqual(p.NetworkRevisionID, revs.current)
+		pending := revs.desired != nil && ptrEqual(p.NetworkRevisionID, revs.desired)
+		if p.Status == profileFailed && current {
+			continue
+		}
+		if !current && !pending {
+			want = 0
 		}
 		pool, gerr := r.k8s.SandboxWarmPools(r.cfg.K8s.Namespace).Get(ctx, p.WarmPoolName, metav1.GetOptions{})
 		if gerr != nil {
@@ -124,6 +145,33 @@ func (r *Runner) DriftCheckWarmPools(ctx context.Context) error {
 		r.log.Info("reconciler: warm pool spec converged", "pool", p.WarmPoolName, "replicas", want)
 	}
 	return nil
+}
+
+type warmPoolNetworkRevisions struct {
+	current *string
+	desired *string
+}
+
+func (r *Runner) desiredRevisionForImage(ctx context.Context, img *model.Image) (*string, error) {
+	if h, err := r.store.DAOs().NetworkHeads.GetImage(ctx, img.ID); err == nil {
+		if h.RolloutStatus == "applying" && h.DesiredRevisionID != nil {
+			return h.DesiredRevisionID, nil
+		}
+		if h.ActiveRevisionID != nil {
+			return nil, nil
+		}
+	} else if err != nil && !errors.Is(err, model.ErrNotFound) {
+		return nil, err
+	}
+	if h, err := r.store.DAOs().NetworkHeads.GetClient(ctx, img.ClientID); err == nil {
+		if h.RolloutStatus == "applying" {
+			return h.DesiredRevisionID, nil
+		}
+		return nil, nil
+	} else if err != nil && !errors.Is(err, model.ErrNotFound) {
+		return nil, err
+	}
+	return nil, nil
 }
 
 func (r *Runner) provisionCurrentImage(ctx context.Context, img *model.Image, platformRev string, replicas int32) error {
