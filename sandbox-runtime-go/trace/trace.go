@@ -3,6 +3,7 @@ package trace
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -25,6 +26,7 @@ type Options struct {
 }
 
 type Status struct {
+	Enabled    bool   `json:"enabled"`
 	Incomplete bool   `json:"incomplete"`
 	Reason     string `json:"reason,omitempty"`
 	Bytes      int64  `json:"bytes"`
@@ -47,7 +49,7 @@ func New(root string, opt Options) (*Recorder, error) {
 	if opt.MaxBytes <= 0 {
 		opt.MaxBytes = 32 << 20
 	}
-	r := &Recorder{root: root, opt: opt, keys: map[string]bool{}}
+	r := &Recorder{root: root, opt: opt, keys: map[string]bool{}, status: Status{Enabled: opt.Enabled}}
 	for _, k := range opt.SignatureQueryKeys {
 		r.keys[strings.ToLower(k)] = true
 	}
@@ -101,7 +103,7 @@ func (r *Recorder) Record(typ string, content any) error {
 		return nil
 	}
 	switch typ {
-	case "model.request", "model.response", "tool.call", "tool.result", "trace.status":
+	case "model.request", "model.response", "tool.call", "tool.result", "trace.status", "agent.final", "agent.stage_result", "agent.error", "diagnostic.status":
 	default:
 		return nil
 	}
@@ -145,18 +147,82 @@ func (r *Recorder) Sanitize(content any) any {
 
 func (r *Recorder) Dir() string { r.mu.Lock(); defer r.mu.Unlock(); return r.dir }
 
+func (r *Recorder) SetPluginVersions(v map[string]string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.opt.PluginVersions = v
+}
+
+func (r *Recorder) Finalize(typ string, content any) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if !r.opt.Enabled || r.dir == "" {
+		return nil
+	}
+	if typ != "agent.final" && typ != "diagnostic.status" {
+		return nil
+	}
+	b, err := json.Marshal(r.sanitize(content))
+	if err != nil {
+		return err
+	}
+	line, err := json.Marshal(map[string]any{
+		"identity": map[string]any{"run_id": r.opt.RunID, "execution_id": r.opt.ExecutionID, "stage": r.opt.Stage, "fence": r.opt.Fence, "round": r.round, "plugin_versions": r.opt.PluginVersions},
+		"type":     typ, "time": time.Now().UTC().Format(time.RFC3339Nano), "content": json.RawMessage(b),
+	})
+	if err != nil {
+		return err
+	}
+	line = append(line, '\n')
+	if r.bytes+int64(len(line)) > r.opt.MaxBytes {
+		return r.finalizeFailureLocked("finalize_budget_exceeded")
+	}
+	f, err := os.OpenFile(filepath.Join(r.dir, "trace.jsonl"), os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		return r.finalizeFailureLocked("finalize_open_failed")
+	}
+	if _, err = f.Write(line); err != nil {
+		_ = f.Close()
+		return r.finalizeFailureLocked("finalize_write_failed")
+	}
+	if err = f.Sync(); err != nil {
+		_ = f.Close()
+		return r.finalizeFailureLocked("finalize_sync_failed")
+	}
+	if err = f.Close(); err != nil {
+		return r.finalizeFailureLocked("finalize_close_failed")
+	}
+	r.bytes += int64(len(line))
+	r.status.Bytes = r.bytes
+	return nil
+}
+
+func (r *Recorder) finalizeFailureLocked(reason string) error {
+	r.status.Incomplete, r.status.Reason, r.status.Bytes = true, reason, r.bytes
+	r.writeStatusLocked()
+	return errors.New(reason)
+}
+
 func (r *Recorder) ReadOnlyDir() string { return r.Dir() }
 func (r *Recorder) Status() Status      { r.mu.Lock(); defer r.mu.Unlock(); return r.status }
 func (r *Recorder) Freeze()             { r.mu.Lock(); defer r.mu.Unlock(); r.closed = true; r.closeFileLocked() }
 func (r *Recorder) Close() error        { r.Freeze(); return nil }
+func (r *Recorder) Disable() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.opt.Enabled = false
+	r.status.Enabled = false
+	r.closed = true
+	r.closeFileLocked()
+}
 
 func (r *Recorder) closeFileLocked() {
 	if r.file != nil {
 		if err := r.file.Sync(); err != nil && !r.status.Incomplete {
-			r.status = Status{Incomplete: true, Reason: "sync: " + err.Error(), Bytes: r.bytes}
+			r.status.Incomplete, r.status.Reason, r.status.Bytes = true, "sync: "+err.Error(), r.bytes
 		}
 		if err := r.file.Close(); err != nil && !r.status.Incomplete {
-			r.status = Status{Incomplete: true, Reason: "close: " + err.Error(), Bytes: r.bytes}
+			r.status.Incomplete, r.status.Reason, r.status.Bytes = true, "close: "+err.Error(), r.bytes
 		}
 		r.file = nil
 	}
@@ -169,7 +235,7 @@ func (r *Recorder) failLocked(reason string) {
 		return
 	}
 	r.failed = true
-	r.status = Status{Incomplete: true, Reason: reason, Bytes: r.bytes}
+	r.status.Incomplete, r.status.Reason, r.status.Bytes = true, reason, r.bytes
 	r.closeFileLocked()
 }
 func (r *Recorder) writeStatusLocked() {

@@ -266,8 +266,10 @@ func (s *Server) handleGetRun(w http.ResponseWriter, r *http.Request) {
 			SHA256:        rr.Delivery.SHA256,
 			SizeBytes:     rr.Delivery.SizeBytes,
 			Summary:       rr.Summary,
+			ErrorDetails:  contracts.NormalizeRuntimeErrorDetails(rr.ErrorDetails),
+			Diagnostics:   contracts.NormalizeDiagnosticOutcome(rr.Diagnostics),
 		}
-		if rr.Status == contracts.RuntimeError && (rr.ErrorCode == "context_limit_exceeded" || rr.ErrorCode == string(contracts.ErrAgentExecutionFailed)) {
+		if rr.Status == contracts.RuntimeError && contracts.IsPublicRuntimeErrorCode(rr.ErrorCode) {
 			resp.Result.ErrorCode = rr.ErrorCode
 			resp.Result.Summary = ""
 			if resp.Result.Status == "" {

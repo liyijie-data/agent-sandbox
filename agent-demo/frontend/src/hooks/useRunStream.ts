@@ -391,9 +391,12 @@ export function useRunStream(options: UseRunStreamOptions) {
         return;
       }
       if (chunk.error) {
+        const errorObj = typeof chunk.error === "object" && chunk.error !== null
+          ? chunk.error as { code?: unknown; message?: unknown; run_id?: unknown }
+          : undefined;
         const code =
           typeof chunk.error === "object" && chunk.error !== null
-            ? String((chunk.error as { code?: unknown }).code ?? "")
+            ? String(errorObj?.code ?? "")
             : "";
         if (STREAM_END_ERROR_CODES.has(code) && activeRunId) {
           requestFinalize(activeRunId);
@@ -401,7 +404,9 @@ export function useRunStream(options: UseRunStreamOptions) {
         }
         const detail = code === "context_limit_exceeded"
           ? "上下文长度超限，压缩后仍无法继续。请减少输入内容或新建会话后重试。"
-          : "执行失败";
+          : typeof errorObj?.message === "string" && errorObj.message.trim()
+          ? `${errorObj.message}${typeof errorObj.run_id === "string" ? `（运行 ID：${errorObj.run_id}）` : ""}`
+          : `执行失败${typeof errorObj?.run_id === "string" ? `（运行 ID：${errorObj.run_id}）` : ""}`;
         setError(detail);
         return;
       }

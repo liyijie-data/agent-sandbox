@@ -2,5 +2,5 @@ apiVersion: v2
 name: agent-platform
 description: Agent Platform control plane, worker, and Agent Sandbox resources
 type: application
-version: 0.1.14
+version: 0.1.16
 appVersion: "dev"

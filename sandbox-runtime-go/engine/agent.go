@@ -6,12 +6,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 const MaxIterations = 40
 const MaxToolConcurrency = 8
+const maxToolErrorOutputBytes = 32 << 10
 
 type Message = api.Message
 type ToolCall = api.ToolCall
@@ -129,10 +132,12 @@ func (a *Agent) RunState(ctx context.Context, req ModelRequest) (State, error) {
 	state := State{Messages: msgs, Status: StatusOK}
 	for i := 0; i < limit; i++ {
 		if err := ctx.Err(); err != nil {
+			state.Status = StatusError
 			return state, fmt.Errorf("execution cancelled: %w", err)
 		}
 		if a.BeforeModel != nil {
 			if e := a.BeforeModel(ctx, &state); e != nil {
+				state.Status = StatusError
 				return state, e
 			}
 		}
@@ -140,6 +145,7 @@ func (a *Agent) RunState(ctx context.Context, req ModelRequest) (State, error) {
 		if e != nil && a.OnModelError != nil {
 			retry, hookErr := a.OnModelError(ctx, &state, e)
 			if hookErr != nil {
+				state.Status = StatusError
 				return state, hookErr
 			}
 			if retry {
@@ -147,6 +153,7 @@ func (a *Agent) RunState(ctx context.Context, req ModelRequest) (State, error) {
 			}
 		}
 		if e != nil {
+			state.Status = StatusError
 			a.observe("agent.final", map[string]any{"status": "error", "error": e.Error()})
 			return state, e
 		}
@@ -160,17 +167,22 @@ func (a *Agent) RunState(ctx context.Context, req ModelRequest) (State, error) {
 		var input *InputRequest
 		var inputID string
 		var extraInputs []ToolCall
+		invalidInputs := make([]ToolCall, 0)
+		invalidInputResults := make(map[string]string)
 		for _, call := range resp.Message.ToolCalls {
 			if call.Name == "agent_request_input" {
 				v := toolStarted(call, nil)
 				a.toolEvent(ctx, "agent.tool_call", v)
 				a.observe("tool.call", v)
 				var q InputRequest
-				if json.Unmarshal(call.Arguments, &q) != nil || (q.Kind != "question" && q.Kind != "choice" && q.Kind != "approval") || q.Prompt == "" || (q.Kind == "choice" && len(q.Options) == 0) {
-					v := toolEventResult(call, nil, toolResult{content: "invalid input request", errType: "invalid_input_request"})
+				if reason := validateInputRequest(call.Arguments, &q); reason != "" {
+					result := toolResult{content: invalidInputResult(reason), errType: "invalid_input_request"}
+					v := toolEventResult(call, nil, result)
 					a.toolEvent(ctx, "agent.tool_result", v)
 					a.observe("tool.result", v)
-					return state, fmt.Errorf("invalid input request")
+					invalidInputs = append(invalidInputs, call)
+					invalidInputResults[call.ID] = result.content
+					continue
 				}
 				if input == nil {
 					input = &q
@@ -195,6 +207,9 @@ func (a *Agent) RunState(ctx context.Context, req ModelRequest) (State, error) {
 		})
 		for j, call := range ordinary {
 			state.Messages = append(state.Messages, Message{Role: "tool", ToolCallID: call.ID, Content: results[j].content})
+		}
+		for _, call := range invalidInputs {
+			state.Messages = append(state.Messages, Message{Role: "tool", ToolCallID: call.ID, Content: invalidInputResults[call.ID]})
 		}
 		if input != nil {
 			state.Messages = append(state.Messages, Message{Role: "tool", ToolCallID: inputID, Content: "input request accepted"})
@@ -265,7 +280,7 @@ func runBatch(ctx context.Context, r *ToolRegistry, calls []ToolCall, observe fu
 			observe(c, t, toolResult{}, true)
 			v, e := t.Execute(ctx, c.Arguments)
 			if e != nil {
-				out[i] = toolResult{content: fmt.Sprintf(`{"error":"tool_failed","message":%q}`, e.Error()), errType: "tool_failed", duration: toolDuration(start)}
+				out[i] = toolResult{content: toolFailureResult(e, v), errType: "tool_failed", duration: toolDuration(start)}
 			} else {
 				out[i] = toolResult{content: v, errType: classifyToolResult(v), duration: toolDuration(start)}
 			}
@@ -274,4 +289,56 @@ func runBatch(ctx context.Context, r *ToolRegistry, calls []ToolCall, observe fu
 	}
 	wg.Wait()
 	return out
+}
+
+func validateInputRequest(raw json.RawMessage, q *InputRequest) string {
+	if json.Unmarshal(raw, q) != nil {
+		return "arguments must be valid JSON"
+	}
+	if q.Kind != "question" && q.Kind != "choice" && q.Kind != "approval" {
+		return "kind must be question, choice, or approval"
+	}
+	if strings.TrimSpace(q.Prompt) == "" {
+		return "prompt is required"
+	}
+	if q.Kind == "choice" && len(q.Options) == 0 {
+		return "choice requests require options"
+	}
+	return ""
+}
+
+func invalidInputResult(reason string) string {
+	b, _ := json.Marshal(map[string]any{"error": "invalid_input_request", "message": reason, "retryable": true})
+	return string(b)
+}
+
+func toolFailureResult(err error, output string) string {
+	message := err.Error()
+	payload := map[string]any{"error": "tool_failed", "message": boundedToolOutput(message)}
+	if len(message) > maxToolErrorOutputBytes {
+		payload["message_truncated"] = true
+	}
+	if output != "" {
+		payload["output"] = boundedToolOutput(output)
+		if len(output) > maxToolErrorOutputBytes {
+			payload["output_truncated"] = true
+		}
+	}
+	b, _ := json.Marshal(payload)
+	return string(b)
+}
+
+func boundedToolOutput(output string) string {
+	limit := maxToolErrorOutputBytes
+	if max := int(api.MaxOutputBytes); limit > max {
+		limit = max
+	}
+	if len(output) <= limit {
+		return output
+	}
+	output = output[:limit]
+	for len(output) > 0 && !utf8.ValidString(output) {
+		output = output[:len(output)-1]
+	}
+	return output
 }

@@ -81,22 +81,22 @@ func runChild(path, pluginsPath string) {
 		raw, de := base64.StdEncoding.DecodeString(snap)
 		pc, pe := plugin.DecodeConfig(raw)
 		if de != nil || pe != nil || app.ValidateProfile(pc) != nil {
-			fmt.Fprintln(os.Stderr, "runtime_protocol_invalid")
+			_ = runtime.ReportStartupFailure(cfg, "/app/output/result.json")
 			os.Exit(1)
 		}
 	} else {
 		pc, le := plugin.LoadConfig(pluginsPath)
 		if le != nil {
-			fmt.Fprintln(os.Stderr, "runtime_protocol_invalid")
+			_ = runtime.ReportStartupFailure(cfg, "/app/output/result.json")
 			os.Exit(1)
 		}
 		if le = app.ValidateProfile(pc); le != nil {
-			fmt.Fprintln(os.Stderr, "runtime_protocol_invalid")
+			_ = runtime.ReportStartupFailure(cfg, "/app/output/result.json")
 			os.Exit(1)
 		}
 		pb, le := json.Marshal(pc)
 		if le != nil || os.Setenv("AGENT_RUNTIME_PLUGINS_SNAPSHOT", base64.StdEncoding.EncodeToString(pb)) != nil {
-			fmt.Fprintln(os.Stderr, "runtime_protocol_invalid")
+			_ = runtime.ReportStartupFailure(cfg, "/app/output/result.json")
 			os.Exit(1)
 		}
 	}

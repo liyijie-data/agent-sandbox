@@ -107,16 +107,34 @@ const (
 type RuntimeResult struct {
 	Status RuntimeResultStatus `json:"status"`
 
-	Summary  string          `json:"summary,omitempty"`
-	Delivery DeliveryOutcome `json:"delivery,omitempty"`
+	Summary     string             `json:"summary,omitempty"`
+	Delivery    DeliveryOutcome    `json:"delivery,omitempty"`
+	Diagnostics *DiagnosticOutcome `json:"diagnostics,omitempty"`
 
 	Request    *InputRequest  `json:"request,omitempty"`
 	Checkpoint *CheckpointRef `json:"checkpoint,omitempty"`
 
 	Steering *RuntimeSteeringResult `json:"steering,omitempty"`
 
-	ErrorCode string `json:"error_code,omitempty"`
-	ErrorType string `json:"error_type,omitempty"`
+	ErrorCode    string               `json:"error_code,omitempty"`
+	ErrorType    string               `json:"error_type,omitempty"`
+	ErrorDetails *RuntimeErrorDetails `json:"error_details,omitempty"`
+}
+
+type DiagnosticOutcome struct {
+	Status        string `json:"status"` // uploaded | unavailable | disabled
+	Reason        string `json:"reason,omitempty"`
+	DestinationID string `json:"destination_id,omitempty"`
+	SHA256        string `json:"sha256,omitempty"`
+	SizeBytes     int64  `json:"size_bytes,omitempty"`
+	Incomplete    bool   `json:"incomplete,omitempty"`
+}
+
+type RuntimeErrorDetails struct {
+	Phase          string `json:"phase,omitempty"`
+	ReasonCode     string `json:"reason_code,omitempty"`
+	UpstreamStatus int    `json:"upstream_status,omitempty"`
+	UserMessage    string `json:"user_message,omitempty"`
 }
 
 type InputRequest struct {

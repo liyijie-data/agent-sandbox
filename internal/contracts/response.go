@@ -68,7 +68,9 @@ type ResultSummary struct {
 
 	Summary string `json:"summary,omitempty"`
 
-	ErrorCode string `json:"error_code,omitempty"`
+	ErrorCode    string               `json:"error_code,omitempty"`
+	ErrorDetails *RuntimeErrorDetails `json:"error_details,omitempty"`
+	Diagnostics  *DiagnosticOutcome   `json:"diagnostics,omitempty"`
 }
 
 type CleanupStatus string

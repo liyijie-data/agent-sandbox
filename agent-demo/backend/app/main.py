@@ -215,12 +215,24 @@ def safe_summary(result: Any) -> str:
     return result["summary"].strip()[:16_384]
 
 
-def import_result_bundle(run_id: str, platform_run_id: str) -> None:
+def import_result_bundle(run_id: str, platform_run_id: str, diagnostics_only: bool = False, expected_sha256: str = "", expected_size: int = 0) -> None:
+    if diagnostics_only and (
+        not isinstance(expected_sha256, str)
+        or len(expected_sha256) != 64
+        or any(char not in "0123456789abcdef" for char in expected_sha256.lower())
+        or not isinstance(expected_size, int)
+        or isinstance(expected_size, bool)
+        or expected_size <= 0
+    ):
+        return
     key = f"runs/{run_id}/result.zip"
     try:
         if objects.stat(key).size > config.MAX_UPLOAD_BYTES:
             raise ValueError("result bundle exceeds Demo upload limit")
         payload = objects.get_bytes(key)
+        if diagnostics_only and expected_sha256 and (len(payload) != expected_size or sha256(payload) != expected_sha256):
+            logger.warning("diagnostic bundle receipt mismatch for run %s", run_id)
+            return
     except Exception:
         return
     try:
@@ -260,7 +272,8 @@ def import_result_bundle(run_id: str, platform_run_id: str) -> None:
                 content = archive.read(info)
                 if len(content) != size or sha256(content) != digest:
                     raise ValueError("result bundle artifact hash does not match manifest")
-                validated.append((source, name, digest, size, content))
+                if not diagnostics_only or (source == "output" and name.startswith(".runtime-trace/")):
+                    validated.append((source, name, digest, size, content))
     except Exception:
         logger.exception("result bundle import rejected for run %s", run_id)
         return
@@ -296,8 +309,20 @@ def persist_platform_run(run_id: str, value: dict[str, Any], streamed_content: s
                     seq = cur.fetchone()["seq"]
                     cur.execute("INSERT INTO demo_messages(id,conversation_id,run_id,role,content,reasoning_content,seq) VALUES(%s,%s,%s,'assistant',%s,%s,%s)", (id(), run["conversation_id"], run_id, content, reasoning or None, seq))
                     cur.execute("UPDATE demo_conversations SET updated_at=CURRENT_TIMESTAMP WHERE id=%s", (run["conversation_id"],))
-    if status == "succeeded" and run.get("platform_run_id"):
-        import_result_bundle(run_id, run["platform_run_id"])
+    diagnostics = result.get("diagnostics") if isinstance(result, dict) else None
+    diagnostics_uploaded = isinstance(diagnostics, dict) and diagnostics.get("status") == "uploaded"
+    diagnostic_sha256 = diagnostics.get("sha256") if isinstance(diagnostics, dict) else ""
+    diagnostic_size = diagnostics.get("size_bytes") if isinstance(diagnostics, dict) else 0
+    diagnostic_receipt_valid = (
+        isinstance(diagnostic_sha256, str)
+        and len(diagnostic_sha256) == 64
+        and all(char in "0123456789abcdef" for char in diagnostic_sha256.lower())
+        and isinstance(diagnostic_size, int)
+        and not isinstance(diagnostic_size, bool)
+        and diagnostic_size > 0
+    )
+    if run.get("platform_run_id") and status in {"succeeded", "failed", "expired", "cancelled"} and (status == "succeeded" or (diagnostics_uploaded and diagnostic_receipt_valid)):
+        import_result_bundle(run_id, run["platform_run_id"], diagnostics_only=status != "succeeded", expected_sha256=diagnostic_sha256 if isinstance(diagnostic_sha256, str) else "", expected_size=diagnostic_size if isinstance(diagnostic_size, int) and not isinstance(diagnostic_size, bool) else 0)
     if status == "failed":
         code = result.get("error_code") if isinstance(result, dict) else None
         if code == "context_limit_exceeded":

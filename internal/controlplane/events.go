@@ -224,12 +224,18 @@ func (s *Server) handleGetRunEvents(w http.ResponseWriter, r *http.Request) {
 					s.sseStop(w, f, runID)
 				} else {
 					code, msg := terminalSSE(status)
+					var details *contracts.RuntimeErrorDetails
 					if status == contracts.RunStatusFailed {
-						if result, rerr := s.runs.LoadRunResult(r.Context(), runID); rerr == nil && result != nil && result.ErrorCode == "context_limit_exceeded" {
-							code, msg = "context_limit_exceeded", "Context length exceeded after compaction"
+						if result, rerr := s.runs.LoadRunResult(r.Context(), runID); rerr == nil && result != nil {
+							details = contracts.NormalizeRuntimeErrorDetails(result.ErrorDetails)
+							if result.ErrorCode == "context_limit_exceeded" {
+								code, msg = "context_limit_exceeded", "Context length exceeded after compaction"
+							} else if details != nil && details.UserMessage != "" {
+								msg = details.UserMessage
+							}
 						}
 					}
-					s.sseFatalCode(w, f, code, msg)
+					s.sseFatalDetails(w, f, runID, code, msg, details)
 				}
 				return
 			} else if status == contracts.RunStatusQueued {
@@ -369,8 +375,26 @@ func (s *Server) sseStop(w io.Writer, f http.Flusher, runID string) {
 }
 
 func (s *Server) sseFatalCode(w io.Writer, f http.Flusher, code, message string) {
+	s.sseFatalDetails(w, f, "", code, message, nil)
+}
+
+func (s *Server) sseFatalDetails(w io.Writer, f http.Flusher, runID, code, message string, details *contracts.RuntimeErrorDetails) {
+	details = contracts.NormalizeRuntimeErrorDetails(details)
+	errBody := map[string]any{"message": message, "type": "agent_platform_error", "code": code}
+	if runID != "" {
+		errBody["run_id"] = runID
+	}
+	if details != nil {
+		errBody["reason_code"] = details.ReasonCode
+		if details.Phase != "" {
+			errBody["phase"] = details.Phase
+		}
+		if details.UpstreamStatus != 0 {
+			errBody["upstream_status"] = details.UpstreamStatus
+		}
+	}
 	body := mustMarshal(map[string]any{
-		"error": map[string]string{"message": message, "type": "agent_platform_error", "code": code},
+		"error": errBody,
 	})
 	sseFrame(w, f, "", "", body)
 	fmt.Fprint(w, "data: [DONE]\n\n")

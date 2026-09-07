@@ -9,8 +9,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 )
@@ -35,6 +37,11 @@ type Error struct {
 	Message string
 }
 
+type ModelRequestError struct{ Err error }
+
+func (e *ModelRequestError) Error() string { return e.Err.Error() }
+func (e *ModelRequestError) Unwrap() error { return e.Err }
+
 func (m *GatewayModel) CurrentTools() []api.ToolDefinition {
 	if m.ToolDefinitions != nil {
 		return m.ToolDefinitions()
@@ -44,8 +51,56 @@ func (m *GatewayModel) CurrentTools() []api.ToolDefinition {
 
 func (e *Error) Error() string { return e.Code }
 func ContextLengthExceeded(err error) bool {
-	e, ok := err.(*Error)
-	return ok && e.Code == "context_length_exceeded"
+	var e *Error
+	return errors.As(err, &e) && (e.Code == "context_length_exceeded" || e.Code == "context_window_exceeded")
+}
+
+func ErrorDetails(err error, phase string) *contracts.RuntimeErrorDetails {
+	var requestErr *ModelRequestError
+	if !errors.As(err, &requestErr) {
+		return nil
+	}
+	d := &contracts.RuntimeErrorDetails{Phase: phase, ReasonCode: "unknown"}
+	if phase == "" {
+		d.Phase = "model"
+	}
+	var e *Error
+	if errors.As(err, &e) {
+		d.UpstreamStatus = e.Status
+		switch {
+		case e.Code == "context_length_exceeded" || e.Code == "context_window_exceeded":
+			d.ReasonCode = "context_limit_exceeded"
+		case e.Status == 401 || e.Status == 403:
+			d.ReasonCode = "upstream_auth_failed"
+		case e.Status == 429:
+			d.ReasonCode = "upstream_rate_limited"
+		case e.Status >= 500:
+			d.ReasonCode = "upstream_unavailable"
+		case e.Status == 400 && missingReasoning(e.Message):
+			d.ReasonCode = "invalid_reasoning_request"
+		case e.Status == 400:
+			d.ReasonCode = "upstream_invalid_request"
+		}
+		return contracts.NormalizeRuntimeErrorDetails(d)
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		d.ReasonCode = "model_timeout"
+		return contracts.NormalizeRuntimeErrorDetails(d)
+	}
+	var ne net.Error
+	if errors.As(err, &ne) {
+		if ne.Timeout() {
+			d.ReasonCode = "model_timeout"
+		} else {
+			d.ReasonCode = "model_transport_error"
+		}
+	}
+	return contracts.NormalizeRuntimeErrorDetails(d)
+}
+
+func missingReasoning(message string) bool {
+	s := strings.ToLower(message)
+	return strings.Contains(s, "reasoning_content") && (strings.Contains(s, "missing") || strings.Contains(s, "required") || strings.Contains(s, "must be returned") || strings.Contains(s, "must be passed back") || strings.Contains(s, "缺失") || strings.Contains(s, "必需"))
 }
 
 type wireMessage struct {
@@ -69,7 +124,7 @@ type wireToolDef struct {
 
 func (m *GatewayModel) Complete(ctx context.Context, r engine.ModelRequest) (engine.ModelResponse, error) {
 	if e := contracts.ValidateModelParameters(m.Parameters, nil, nil, nil); e != nil {
-		return engine.ModelResponse{}, e
+		return engine.ModelResponse{}, &ModelRequestError{Err: e}
 	}
 	msgs := make([]wireMessage, 0, len(r.Messages))
 	for _, x := range r.Messages {
@@ -127,7 +182,7 @@ func (m *GatewayModel) Complete(ctx context.Context, r engine.ModelRequest) (eng
 	}
 	req, e := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(m.BaseURL, "/")+"/chat/completions", bytes.NewReader(b))
 	if e != nil {
-		return engine.ModelResponse{}, e
+		return engine.ModelResponse{}, &ModelRequestError{Err: e}
 	}
 	req.Header.Set("Authorization", "Bearer "+m.Token)
 	req.Header.Set("Content-Type", "application/json")
@@ -137,7 +192,7 @@ func (m *GatewayModel) Complete(ctx context.Context, r engine.ModelRequest) (eng
 			b, _ := json.Marshal(map[string]any{"choices": []any{}, "incomplete": true, "error_code": "model_gateway_transport_error"})
 			_ = m.OnResponse(b)
 		}
-		return engine.ModelResponse{}, e
+		return engine.ModelResponse{}, &ModelRequestError{Err: e}
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode/100 != 2 {
@@ -166,16 +221,23 @@ func (m *GatewayModel) Complete(ctx context.Context, r engine.ModelRequest) (eng
 			b, _ := json.Marshal(failure)
 			_ = m.OnResponse(b)
 		}
-		return engine.ModelResponse{}, &Error{code, resp.StatusCode, x.Error.Message}
+		return engine.ModelResponse{}, &ModelRequestError{Err: &Error{code, resp.StatusCode, x.Error.Message}}
 	}
 	if !strings.Contains(resp.Header.Get("Content-Type"), "text/event-stream") {
 		v, e := m.readJSON(resp.Body)
 		if e == nil && m.OnResponse != nil {
 			_ = m.OnResponse(v.Raw)
 		}
-		return v, e
+		if e != nil {
+			return v, &ModelRequestError{Err: e}
+		}
+		return v, nil
 	}
-	return m.readSSE(resp.Body)
+	v, e := m.readSSE(resp.Body)
+	if e != nil {
+		return v, &ModelRequestError{Err: e}
+	}
+	return v, nil
 }
 
 func (m *GatewayModel) compatibleToolName(name string) string {

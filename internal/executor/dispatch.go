@@ -115,14 +115,15 @@ func (e *Executor) commitFailed(ctx context.Context, runID string, stageNo int,
 	fence int64, owner string, res *contracts.RuntimeResult) (ExecuteResult, error) {
 	code := res.ErrorCode
 	safeCode := code
-	if safeCode != "context_limit_exceeded" && safeCode != string(contracts.ErrAgentExecutionFailed) {
+	if !contracts.IsPublicRuntimeErrorCode(safeCode) {
 		safeCode = string(contracts.ErrAgentExecutionFailed)
 	}
 	e.log.Warn("run committed failed", "run", runID, "stage", stageNo, "error_code", code)
+	result := &contracts.RuntimeResult{Status: contracts.RuntimeError, ErrorCode: safeCode, ErrorDetails: contracts.NormalizeRuntimeErrorDetails(res.ErrorDetails), Diagnostics: contracts.NormalizeDiagnosticOutcome(res.Diagnostics)}
 	applied, err := e.runs.FinishRun(ctx, runID, stageNo, fence, owner,
 		executingStatuses(),
 		runs.FinishState{Status: contracts.RunStatusFailed, ErrorCode: code,
-			ResultContent: e.resultContent(&contracts.RuntimeResult{Status: contracts.RuntimeError, ErrorCode: safeCode})})
+			ResultContent: e.resultContent(result)})
 	if err != nil {
 		return OutcomeFailed, err
 	}
@@ -143,7 +144,8 @@ func (e *Executor) runOutcomeUnknown(ctx context.Context, runID string, stageNo 
 	applied, err := e.runs.FinishRun(ctx, runID, stageNo, fence, owner,
 		executingStatuses(),
 		runs.FinishState{Status: contracts.RunStatusFailed,
-			ErrorCode: string(contracts.ErrExecutionOutcomeUnknown)})
+			ErrorCode:     string(contracts.ErrExecutionOutcomeUnknown),
+			ResultContent: e.resultContent(&contracts.RuntimeResult{Status: contracts.RuntimeError, ErrorCode: string(contracts.ErrExecutionOutcomeUnknown), ErrorDetails: &contracts.RuntimeErrorDetails{Phase: "runtime", ReasonCode: "unknown"}, Diagnostics: &contracts.DiagnosticOutcome{Status: "unavailable", Reason: "runtime_result_missing"}})})
 	if err != nil || !applied {
 		return OutcomeStale
 	}

@@ -34,7 +34,7 @@ func inlineLegacyBlob(line []byte, stageDir string) ([]byte, bool) {
 	if json.Unmarshal(line, &obj) != nil {
 		return line, false
 	}
-	if typ, _ := obj["type"].(string); typ != "model.request" && typ != "model.response" && typ != "tool.call" && typ != "tool.result" && typ != "trace.status" {
+	if typ, _ := obj["type"].(string); typ != "model.request" && typ != "model.response" && typ != "tool.call" && typ != "tool.result" && typ != "trace.status" && typ != "agent.final" && typ != "agent.stage_result" && typ != "agent.error" && typ != "diagnostic.status" {
 		return nil, true
 	}
 	content, ok := obj["content"].(map[string]any)
